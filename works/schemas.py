@@ -30,16 +30,20 @@ def _parse_abstract_inverted_index(abstract_inverted_index_str):
     if not abstract_inverted_index_str:
         return None
 
-    try:
-        parsed = json.loads(abstract_inverted_index_str)
-        # Some records may have the data nested under "InvertedIndex" key
-        return parsed.get("InvertedIndex", parsed)
-    except json.JSONDecodeError as e:
-        logger.warning(
-            f"Failed to parse abstract_inverted_index JSON: {e}. "
-            f"Data preview: {abstract_inverted_index_str[:100]}..."
-        )
-        return None
+    if isinstance(abstract_inverted_index_str, (dict, list)):
+        parsed = abstract_inverted_index_str
+    else:
+        try:
+            parsed = json.loads(abstract_inverted_index_str)
+        except json.JSONDecodeError as e:
+            logger.warning(
+                f"Failed to parse abstract_inverted_index JSON: {e}. "
+                f"Data preview: {str(abstract_inverted_index_str)[:100]}..."
+            )
+            return None
+    
+    # Some records may have the data nested under "InvertedIndex" key
+    return parsed.get("InvertedIndex", parsed) if isinstance(parsed, dict) else parsed
 
 
 class AuthorSchema(Schema):

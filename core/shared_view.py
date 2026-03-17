@@ -21,6 +21,7 @@ from core.semantic_search import embed_query, VECTOR_FIELD
 from core.sort import get_sort_fields, sort_with_cursor, sort_with_sample
 from core.utils import get_data_version_connection, get_field
 from core.vector_index import vector_semantic_search
+from clickhouse_api.clickhouse import get_clickhouse_backend
 
 
 def shared_view(request, fields_dict, index_name, default_sort, connection=None, default_filters=None):
@@ -46,6 +47,12 @@ def shared_view(request, fields_dict, index_name, default_sort, connection=None,
     )
     if is_semantic and settings.USE_VECTOR_INDEX:
         return vector_semantic_search(params, index_name, connection)
+
+    if settings.USE_CLICKHOUSE:
+        # Determine entity from index name (e.g., 'works-v33' -> 'works')
+        entity_name = index_name.split('-')[0]
+        ch = get_clickhouse_backend()
+        return ch.query_entity(entity_name, params)
 
     s = construct_query(params, fields_dict, index_name, default_sort, connection)
     response = execute_search(s, params)

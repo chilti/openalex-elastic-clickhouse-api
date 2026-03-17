@@ -1,8 +1,12 @@
 import os
+from dotenv import load_dotenv
+
+# Load ClickHouse credentials from the dedicated directory
+load_dotenv(os.path.join(os.path.dirname(__file__), 'clickhouse_api', '.env'))
 
 CACHE_TYPE = "RedisCache"
 CACHE_DEFAULT_TIMEOUT = 300
-CACHE_REDIS_URL = os.environ.get("REDISCLOUD_URL")
+CACHE_REDIS_URL = os.environ.get("REDISCLOUD_URL", "redis://localhost:6379/0")
 DATABRICKS_HOST = os.environ.get("DATABRICKS_HOST")
 DATABRICKS_HTTP_PATH = os.environ.get("DATABRICKS_HTTP_PATH")
 DATABRICKS_TOKEN = os.environ.get("DATABRICKS_TOKEN")
@@ -14,15 +18,24 @@ DEBUG = ENV == "development"
 JSON_SORT_KEYS = False
 SECRET_KEY = os.environ.get("SECRET_KEY")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-SQLALCHEMY_DATABASE_URI = os.environ.get("REDSHIFT_SERVERLESS_URL")
+SQLALCHEMY_DATABASE_URI = os.environ.get("REDSHIFT_SERVERLESS_URL", "sqlite:///local.db")
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 SQLALCHEMY_ECHO = True if ENV == "development" else False
+
+# ClickHouse Configuration
+CH_HOST = os.environ.get('CH_HOST', '127.0.0.1')
+CH_PORT = int(os.environ.get('CH_PORT', 8123))
+CH_USER = os.environ.get('CH_USER', 'default')
+CH_PASSWORD = os.environ.get('CH_PASSWORD', '')
+CH_DATABASE = os.environ.get('CH_DATABASE', 'rag')
+USE_CLICKHOUSE = os.environ.get('USE_CLICKHOUSE', 'false').lower() == 'true'
+
 
 # Analytics
 SEARCH_QUEUE = "search_queue"
 ENABLE_SEARCH_CACHE = True
 OPEN_ALEX_API_KEY = os.environ.get("OPEN_ALEX_API_KEY")
-USERS_API_URL = os.environ.get("USERS_API_URL")
+USERS_API_URL = os.environ.get("USERS_API_URL", "http://localhost:8080")
 
 # indexes
 AUTHORS_INDEX_WALDEN = "authors-v18"

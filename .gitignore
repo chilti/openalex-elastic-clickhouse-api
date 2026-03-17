@@ -25,4 +25,10 @@ scratch/
 run_local.py
 
 # Local virtualenv
-api/
+# Diagnostic and test scripts
+test_*.py
+server_log*.txt
+flask_error_log*.txt
+schema_dump_error.txt
+test_dump_output.txt
+list_ch_db.py

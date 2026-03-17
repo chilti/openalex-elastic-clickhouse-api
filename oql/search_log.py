@@ -7,9 +7,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 import sqlalchemy
 
 # --- Dedicated SQLAlchemy Setup for Logging ---
-USERS_DB_URL = os.getenv('USERS_DB_URL')
-if not USERS_DB_URL:
-    raise ValueError("Missing USERS_DB_URL environment variable")
+USERS_DB_URL = os.getenv('USERS_DB_URL', 'postgresql://localhost:5432/users')
 
 users_db_url = USERS_DB_URL.replace('postgres://', 'postgresql://')
 

@@ -20,7 +20,7 @@ from oql.search_log import SearchLog
 
 blueprint = Blueprint("oql", __name__)
 redis_db = redis.Redis.from_url(settings.CACHE_REDIS_URL)
-redis_client = Redis.from_url(os.environ.get("REDIS_DO_URL"))
+redis_client = Redis.from_url(os.environ.get("REDIS_DO_URL", "redis://localhost:6379/1"))
 search_queue = settings.SEARCH_QUEUE
 
 

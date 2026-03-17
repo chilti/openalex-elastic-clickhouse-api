@@ -5,7 +5,6 @@ import io
 from flask import make_response
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
-from openpyxl.writer.excel import save_virtual_workbook
 
 
 def is_group_by_export(request):
@@ -107,7 +106,9 @@ def export_group_by_xlsx(filename, group_by_results):
         adjusted_width = max_length + 2
         ws.column_dimensions[get_column_letter(column)].width = adjusted_width
 
-    output = make_response(save_virtual_workbook(wb))
+    virtual_workbook = io.BytesIO()
+    wb.save(virtual_workbook)
+    output = make_response(virtual_workbook.getvalue())
     output.headers["Content-disposition"] = f"attachment; filename={filename}"
     output.headers[
         "Content-type"

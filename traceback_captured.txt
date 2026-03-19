@@ -1,0 +1,19 @@
+Traceback (most recent call last):
+  File "C:\Users\jlja\Documents\Proyectos\openalex-elastic-api\get_traceback.py", line 5, in <module>
+    import app
+  File "C:\Users\jlja\Documents\Proyectos\openalex-elastic-api\app.py", line 30, in <module>
+    import oql
+  File "C:\Users\jlja\Documents\Proyectos\openalex-elastic-api\oql\__init__.py", line 1, in <module>
+    from . import views
+  File "C:\Users\jlja\Documents\Proyectos\openalex-elastic-api\oql\views.py", line 13, in <module>
+    from oql.process_bulk_tests import decode_redis_data
+  File "C:\Users\jlja\Documents\Proyectos\openalex-elastic-api\oql\process_bulk_tests.py", line 12, in <module>
+    REDIS_CLIENT = Redis.from_url(os.environ.get("REDIS_DO_URL"))
+  File "C:\Users\jlja\AppData\Roaming\Python\Python314\site-packages\redis\client.py", line 181, in from_url
+    connection_pool = ConnectionPool.from_url(url, **kwargs)
+  File "C:\Users\jlja\AppData\Roaming\Python\Python314\site-packages\redis\connection.py", line 2765, in from_url
+    url_options = parse_url(url)
+  File "C:\Users\jlja\AppData\Roaming\Python\Python314\site-packages\redis\connection.py", line 2165, in parse_url
+    url.startswith("redis://")
+    ^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'startswith'

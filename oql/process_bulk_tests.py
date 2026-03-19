@@ -9,7 +9,7 @@ from redis.client import Redis
 
 from oql.util import queries_equal
 
-REDIS_CLIENT = Redis.from_url(os.environ.get("REDIS_DO_URL"))
+REDIS_CLIENT = Redis.from_url(os.environ.get("REDIS_DO_URL", "redis://localhost:6379/1"))
 
 EXECUTOR = ThreadPoolExecutor(max_workers=os.environ.get("TEST_THREADS_PER_DYNO", 100))
 HARD_TIMEOUT = 2*60

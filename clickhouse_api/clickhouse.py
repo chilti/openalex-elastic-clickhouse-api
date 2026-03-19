@@ -41,15 +41,23 @@ class ClickHouseBackend:
         
         # Base query
         sql = f"SELECT raw_data FROM {table_name}"
+        count_sql = f"SELECT count() FROM {table_name}"
         
         where_clauses = []
         
         # Handle search
         search_query = params.get("search")
         if search_query and search_query != '""':
-            # Basic text search on raw_data string (very naive first pass)
-            escaped_search = search_query.replace("'", "''")
-            where_clauses.append(f"raw_data LIKE '%{escaped_search}%'")
+            # Support title-specific search if requested via title:query
+            if search_query.startswith("title:"):
+                title_query = search_query.replace("title:", "", 1).strip()
+                escaped_search = title_query.replace("'", "''")
+                where_clauses.append(f"JSONExtractString(raw_data, 'title') ILIKE '%{escaped_search}%'")
+            else:
+                # Basic text search on raw_data string (very naive first pass)
+                # ILIKE is case-insensitive
+                escaped_search = search_query.replace("'", "''")
+                where_clauses.append(f"raw_data ILIKE '%{escaped_search}%'")
         
         # Handle filters (simplified)
         filters = params.get("filters")
@@ -57,7 +65,17 @@ class ClickHouseBackend:
             for f in filters:
                 for key, value in f.items():
                     # Handle pipe-separated multiple values (OR)
-                    values = value.split("|")
+                    values = str(value).split("|")
+                    
+                    # Handle search fields in filters (e.g., title.search)
+                    if key.endswith(".search"):
+                        field_name = key.replace(".search", "")
+                        path_parts = [f"'{p}'" for p in field_name.split(".")]
+                        path_str = ", ".join(path_parts)
+                        escaped_val = str(value).replace("'", "''")
+                        where_clauses.append(f"JSONExtractString(raw_data, {path_str}) ILIKE '%{escaped_val}%'")
+                        continue
+
                     if key == "id":
                         vals_str = ",".join([f"'{v}'" for v in values])
                         where_clauses.append(f"id IN ({vals_str})")
@@ -72,7 +90,9 @@ class ClickHouseBackend:
                             where_clauses.append(f"JSONExtractString(raw_data, {path_str}) = '{value}'")
 
         if where_clauses:
-            sql += " WHERE " + " AND ".join(where_clauses)
+            where_part = " WHERE " + " AND ".join(where_clauses)
+            sql += where_part
+            count_sql += where_part
 
         # Handle sorting
         sort = params.get("sort")
@@ -99,6 +119,15 @@ class ClickHouseBackend:
         logger.info(f"Executing ClickHouse SQL: {sql}")
         result = client.query(sql)
         
+        # Optional: query for total count (might be slow)
+        total_count = 0
+        try:
+            count_result = client.query(count_sql)
+            total_count = count_result.first_row[0]
+        except Exception as e:
+            logger.warning(f"Failed to get total count: {e}")
+            total_count = len(result.result_rows)
+
         records = []
         for row in result.result_rows:
             data = json.loads(row[0])
@@ -107,12 +136,40 @@ class ClickHouseBackend:
         return AttrDict({
             "results": records,
             "meta": {
-                "count": len(records), 
+                "count": total_count, 
                 "db_response_time_ms": 0,
                 "page": page,
                 "per_page": per_page
             }
         })
+
+    def get_item_by_id(self, entity_name, id_value, id_type="id"):
+        client = self.get_client()
+        table_name = f"`{entity_name}`"
+        
+        where_clause = ""
+        if id_type == "id":
+            where_clause = f"id = '{id_value}'"
+        elif id_type == "doi":
+            # OpenAlex JSON usually has 'doi' field with 'https://doi.org/' prefix
+            where_clause = f"JSONExtractString(raw_data, 'doi') = '{id_value}'"
+        elif id_type == "pmid":
+             where_clause = f"JSONExtractString(raw_data, 'ids', 'pmid') = '{id_value}'"
+        else:
+            # Fallback to general ID lookup in ids object
+            where_clause = f"JSONExtractString(raw_data, 'ids', '{id_type}') = '{id_value}'"
+
+        sql = f"SELECT raw_data FROM {table_name} WHERE {where_clause} LIMIT 1"
+        
+        print(f"Executing ClickHouse SQL (GetByID): {sql}")
+        logger.info(f"Executing ClickHouse SQL (GetByID): {sql}")
+        result = client.query(sql)
+        
+        if not result.result_rows:
+            return None
+            
+        data = json.loads(result.result_rows[0][0])
+        return AttrDict(data)
 
 def get_clickhouse_backend():
     return ClickHouseBackend()

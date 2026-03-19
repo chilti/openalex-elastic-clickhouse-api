@@ -100,8 +100,30 @@ def works_id_get(id):
     connection = get_data_version_connection(request)
     index_name = settings.WORKS_INDEX_WALDEN if connection == 'walden' else settings.WORKS_INDEX_LEGACY
 
-    s = Search(index=index_name, using=connection)
     only_fields = process_id_only_fields(request, WorksSchema)
+    
+    if settings.USE_CLICKHOUSE:
+        from clickhouse_api.clickhouse import get_clickhouse_backend
+        ch = get_clickhouse_backend()
+        id_type = "id"
+        if id.startswith("doi:") or ("doi" in id):
+            id_type = "doi"
+            from ids.utils import normalize_doi
+            clean_doi = normalize_doi(id, return_none_if_error=True)
+            id = f"https://doi.org/{clean_doi}"
+        elif id.startswith("pmid:"):
+            id_type = "pmid"
+            id = id.replace("pmid:", "")
+        
+        result = ch.get_item_by_id("works", id, id_type)
+        if not result:
+            abort(404)
+        works_schema = WorksSchema(
+            context={"display_relevance": False, "single_record": True}, only=only_fields
+        )
+        return works_schema.dump(result)
+
+    s = Search(index=index_name, using=connection)
 
     if is_openalex_id(id):
         clean_id = normalize_openalex_id(id)
@@ -163,8 +185,27 @@ def works_id_get(id):
 
 @blueprint.route("/v2/works/<path:id>")
 def works_v2_id_get(id):
-    s = Search(index=settings.WORKS_INDEX_WALDEN, using="walden")
     only_fields = process_id_only_fields(request, WorksSchema)
+
+    if settings.USE_CLICKHOUSE:
+        from clickhouse_api.clickhouse import get_clickhouse_backend
+        ch = get_clickhouse_backend()
+        id_type = "id"
+        if id.startswith("doi:") or ("doi" in id):
+            id_type = "doi"
+            from ids.utils import normalize_doi
+            clean_doi = normalize_doi(id, return_none_if_error=True)
+            id = f"https://doi.org/{clean_doi}"
+        
+        result = ch.get_item_by_id("works", id, id_type)
+        if not result:
+            abort(404)
+        works_schema = WorksSchema(
+            context={"display_relevance": False, "single_record": True}, only=only_fields
+        )
+        return works_schema.dump(result)
+
+    s = Search(index=settings.WORKS_INDEX_WALDEN, using="walden")
 
     if is_openalex_id(id):
         clean_id = normalize_openalex_id(id)

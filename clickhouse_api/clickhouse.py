@@ -17,9 +17,8 @@ class AttrDict(dict):
                 return AttrDict(val)
             if isinstance(val, list):
                 return [AttrDict(i) if isinstance(i, dict) and not isinstance(i, AttrDict) else i for i in val]
-            return val
         if name == 'meta':
-            return AttrDict()
+            return AttrDict({'score': None})
         raise AttributeError(f"'AttrDict' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):

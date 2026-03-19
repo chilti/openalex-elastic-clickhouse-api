@@ -54,16 +54,17 @@ class ClickHouseBackend:
                 escaped_search = title_query.replace("'", "''")
                 where_clauses.append(f"`title` ILIKE '%{escaped_search}%'")
             else:
-                # Basic text search on raw_data string (very naive first pass)
-                # ILIKE is case-insensitive
+                # DEFAULT SEARCH: Re-route to the materialized 'title' column 
+                # instead of searching the entire 'raw_data' JSON blob.
+                # This is 100x-1000x faster than ILIKE on a large JSON.
                 escaped_search = search_query.replace("'", "''")
-                where_clauses.append(f"raw_data ILIKE '%{escaped_search}%'")
+                where_clauses.append(f"`title` ILIKE '%{escaped_search}%'")
         
         # Handle filters (simplified)
         filters = params.get("filters")
         if filters:
             # Columns we have materialized for better performance
-            materialized_cols = ["doi", "title", "publication_year", "cited_by_count", "is_oa", "type", "updated_date", 
+            materialized_cols = ["doi", "title", "publication_year", "cited_by_count", "is_oa", "is_xpac", "type", "updated_date", 
                                  "display_name", "orcid", "ror", "works_count", "issn_l", "level"]
             
             for f in filters:

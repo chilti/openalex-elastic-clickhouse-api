@@ -18,6 +18,16 @@ class AttrDict(dict):
             if isinstance(val, list):
                 return [AttrDict(i) if isinstance(i, dict) and not isinstance(i, AttrDict) else i for i in val]
             return val
+        raise AttributeError(f"'AttrDict' object has no attribute '{name}'")
+
+    def __setattr__(self, name, value):
+        self[name] = value
+
+    def __delattr__(self, name):
+        if name in self:
+            del self[name]
+        else:
+            raise AttributeError(f"'AttrDict' object has no attribute '{name}'")
         if name == 'meta':
             return AttrDict()
         return None

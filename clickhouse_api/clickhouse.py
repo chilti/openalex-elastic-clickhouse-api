@@ -176,6 +176,9 @@ class ClickHouseBackend:
         
         where_clause = ""
         if id_type == "id":
+            if not id_value.startswith("http"):
+                # ClickHouse 'id' column contains full URLs (e.g., https://openalex.org/W...)
+                id_value = f"https://openalex.org/{id_value}"
             where_clause = f"id = '{id_value}'"
         elif id_type == "doi":
             # Using the new 'doi' column for 1000x better performance

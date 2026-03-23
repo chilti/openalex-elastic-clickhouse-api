@@ -351,7 +351,35 @@ def authors_id_get(id):
 
     s = Search(index=index_name, using=connection)
     only_fields = process_id_only_fields(request, AuthorsSchema)
+    if settings.USE_CLICKHOUSE:
+        from clickhouse_api.clickhouse import get_clickhouse_backend
+        ch = get_clickhouse_backend()
+        id_type = "id"
+        if id.startswith("orcid:") or id.startswith("https://orcid.org"):
+            id_type = "orcid"
+            from ids.utils import normalize_orcid
+            id = normalize_orcid(id)
+        elif id.startswith("mag:"):
+            id = id.replace("mag:", "")
+            id = f"A{id}"
+        
+        result = ch.get_item_by_id("authors", id, id_type)
+        if not result:
+            abort(404)
+        
+        authors_schema = AuthorsSchema(
+            context={"display_relevance": False}, only=only_fields
+        )
+        if is_ui_format():
+            json_output = json.dumps(dict(authors_schema.dump(result)))
+            ui_format = format_as_ui("authors", json_output)
+            return jsonify({
+                "meta": {"count": 1, "page": 1, "per_page": 1},
+                "props": ui_format
+            })
+        return authors_schema.dump(result)
 
+    s = Search(index=index_name, using=connection)
     if is_openalex_id(id):
         clean_id = normalize_openalex_id(id)
         if clean_id != id:
@@ -428,6 +456,35 @@ def institutions_id_get(id):
     s = Search(index=settings.INSTITUTIONS_INDEX, using=connection)
     only_fields = process_id_only_fields(request, InstitutionsSchema)
 
+    if settings.USE_CLICKHOUSE:
+        ch = get_clickhouse_backend()
+        id_type = "id"
+        if id.startswith("ror:") or ("ror.org" in id):
+            id_type = "ror"
+            from ids.utils import normalize_ror
+            id = normalize_ror(id)
+        elif id.startswith("wikidata:") or ("wikidata" in id):
+            id_type = "wikidata"
+            from ids.utils import normalize_wikidata
+            id = normalize_wikidata(id)
+        elif id.startswith("mag:"):
+            id = id.replace("mag:", "")
+            id = f"I{id}"
+        
+        result = ch.get_item_by_id("institutions", id, id_type)
+        if not result:
+            abort(404)
+        
+        institutions_schema = InstitutionsSchema(
+            context={"display_relevance": False}, only=only_fields
+        )
+        if is_ui_format():
+            json_output = json.dumps(dict(institutions_schema.dump(result)))
+            ui_format = format_as_ui("institutions", json_output)
+            return jsonify(ui_format)
+        return institutions_schema.dump(result)
+
+    s = Search(index=settings.INSTITUTIONS_INDEX, using=connection)
     if is_openalex_id(id):
         clean_id = normalize_openalex_id(id)
         if clean_id != id:
@@ -438,12 +495,7 @@ def institutions_id_get(id):
         full_openalex_id = f"https://openalex.org/I{clean_id}"
         query = Q("term", ids__openalex=full_openalex_id)
         s = s.filter(query)
-
-        # Execute search and check if document exists
         response = s.execute()
-        if not response.hits:  # Check if any hits were returned
-            abort(404)
-
     elif id.startswith("mag:"):
         clean_id = id.replace("mag:", "")
         clean_id = f"I{clean_id}"
@@ -467,9 +519,10 @@ def institutions_id_get(id):
     else:
         abort(404)
 
-    # Remove the duplicate response execution since we handle it above
-    if not response.hits:  # Use response.hits instead of just response
+    if not response.hits:
         abort(404)
+    
+    result = response[0]
 
     institutions_schema = InstitutionsSchema(
         context={"display_relevance": False}, only=only_fields

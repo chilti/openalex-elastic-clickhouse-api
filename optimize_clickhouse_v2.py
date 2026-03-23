@@ -41,6 +41,22 @@ def optimize():
             ("is_xpac", "String", "JSONExtractString(raw_data, 'is_xpac')"),
             ("type", "String"),
             ("updated_date", "String")
+        ],
+        "institutions": [
+            ("ror", "String"),
+            ("display_name", "String"),
+            ("country_code", "String"),
+            ("type", "String"),
+            ("works_count", "Int32", "JSONExtractInt(raw_data, 'works_count')"),
+            ("cited_by_count", "Int64", "JSONExtractInt(raw_data, 'cited_by_count')"),
+            ("updated_date", "String")
+        ],
+        "authors": [
+            ("orcid", "String"),
+            ("display_name", "String"),
+            ("works_count", "Int32", "JSONExtractInt(raw_data, 'works_count')"),
+            ("cited_by_count", "Int64", "JSONExtractInt(raw_data, 'cited_by_count')"),
+            ("updated_date", "String")
         ]
     }
 

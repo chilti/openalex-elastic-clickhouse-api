@@ -75,9 +75,51 @@ class ClickHouseBackend:
             
             for f in filters:
                 for key, value in f.items():
+                    # Handle date aliases
+                    op = "="
+                    if key == "from_publication_date":
+                        key = "publication_date"
+                        op = ">="
+                    elif key == "to_publication_date":
+                        key = "publication_date"
+                        op = "<="
+                    elif key == "from_created_date":
+                        key = "created_date"
+                        op = ">="
+                    elif key == "to_created_date":
+                        key = "created_date"
+                        op = "<="
+                    
+                    # Handle operators in value
+                    val_str = str(value)
+                    if val_str.startswith(">="):
+                        op = ">="
+                        value = val_str[2:]
+                    elif val_str.startswith("<="):
+                        op = "<="
+                        value = val_str[2:]
+                    elif val_str.startswith(">"):
+                        op = ">"
+                        value = val_str[1:]
+                    elif val_str.startswith("<"):
+                        op = "<"
+                        value = val_str[1:]
+                    elif val_str.startswith("!"):
+                        op = "!="
+                        value = val_str[1:]
+
                     # Handle pipe-separated multiple values (OR)
                     values = str(value).split("|")
                     
+                    # Special handling for 'id' to prepend URL if missing
+                    if key == "id":
+                        new_values = []
+                        for v in values:
+                            if not v.startswith("http"):
+                                v = f"https://openalex.org/{v}"
+                            new_values.append(v)
+                        values = new_values
+
                     # Handle search fields in filters (e.g., title.search)
                     if key.endswith(".search"):
                         field_name = key.replace(".search", "")
@@ -91,24 +133,50 @@ class ClickHouseBackend:
                             where_clauses.append(f"JSONExtractString(raw_data, {path_str}) ILIKE '%{escaped_val}%'")
                         continue
 
-                    if key == "id":
-                        vals_str = ",".join([f"'{v}'" for v in values])
-                        where_clauses.append(f"id IN ({vals_str})")
-                    elif key in materialized_cols:
-                        if len(values) > 1:
+                    # Construct the SQL clause
+                    if key in materialized_cols or key == "id":
+                        col_name = f"`{key}`" if key != "id" else "id"
+                        if len(values) > 1 and op == "=":
                             vals_str = ",".join([f"'{v}'" for v in values])
-                            where_clauses.append(f"`{key}` IN ({vals_str})")
+                            where_clauses.append(f"{col_name} IN ({vals_str})")
+                        elif len(values) > 1 and op == "!=":
+                            vals_str = ",".join([f"'{v}'" for v in values])
+                            where_clauses.append(f"{col_name} NOT IN ({vals_str})")
                         else:
-                            where_clauses.append(f"`{key}` = '{value}'")
+                            # Apply operator to all values joined by OR if multiple values
+                            clauses = []
+                            for v in values:
+                                escaped_v = str(v).replace("'", "''")
+                                # Try to determine if it's numeric for better performance
+                                if escaped_v.isdigit() or (escaped_v.startswith("-") and escaped_v[1:].isdigit()):
+                                    clauses.append(f"{col_name} {op} {escaped_v}")
+                                else:
+                                    clauses.append(f"{col_name} {op} '{escaped_v}'")
+                            if len(clauses) > 1:
+                                where_clauses.append("(" + " OR ".join(clauses) + ")")
+                            else:
+                                where_clauses.append(clauses[0])
                     else:
-                        # Map dots to JSONExtract path
+                        # Fallback to JSON extraction
                         path_parts = [f"'{p}'" for p in key.split(".")]
                         path_str = ", ".join(path_parts)
-                        if len(values) > 1:
-                            vals_str = ",".join([f"'{v}'" for v in values])
-                            where_clauses.append(f"JSONExtractString(raw_data, {path_str}) IN ({vals_str})")
+                        # Detection for numeric vs string in JSON
+                        extract_func = "JSONExtractString"
+                        if key in ["publication_year", "cited_by_count", "works_count"]:
+                            extract_func = "JSONExtractInt"
+                        
+                        clauses = []
+                        for v in values:
+                            escaped_v = str(v).replace("'", "''")
+                            if extract_func == "JSONExtractInt":
+                                clauses.append(f"{extract_func}(raw_data, {path_str}) {op} {escaped_v}")
+                            else:
+                                clauses.append(f"{extract_func}(raw_data, {path_str}) {op} '{escaped_v}'")
+                        
+                        if len(clauses) > 1:
+                            where_clauses.append("(" + " OR ".join(clauses) + ")")
                         else:
-                            where_clauses.append(f"JSONExtractString(raw_data, {path_str}) = '{value}'")
+                            where_clauses.append(clauses[0])
 
         if where_clauses:
             where_part = " WHERE " + " AND ".join(where_clauses)
@@ -183,6 +251,18 @@ class ClickHouseBackend:
         elif id_type == "doi":
             # Using the new 'doi' column for 1000x better performance
             where_clause = f"doi = '{id_value}'"
+        elif id_type == "ror":
+            if not id_value.startswith("http"):
+                id_value = f"https://ror.org/{id_value}"
+            where_clause = f"ror = '{id_value}'"
+        elif id_type == "orcid":
+            if not id_value.startswith("http"):
+                id_value = f"https://orcid.org/{id_value}"
+            where_clause = f"orcid = '{id_value}'"
+        elif id_type == "wikidata":
+            if not id_value.startswith("http"):
+                id_value = f"https://www.wikidata.org/wiki/{id_value}"
+            where_clause = f"JSONExtractString(raw_data, 'ids', 'wikidata') = '{id_value}'"
         elif id_type == "pmid":
              where_clause = f"JSONExtractString(raw_data, 'ids', 'pmid') = '{id_value}'"
         else:

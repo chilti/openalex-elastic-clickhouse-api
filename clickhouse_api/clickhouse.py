@@ -35,15 +35,29 @@ class ClickHouseBackend:
     def get_client(self):
         # Auto-enable secure connection for port 8124
         is_secure = (CH_PORT == 8124)
-        return clickhouse_connect.get_client(
-            host=CH_HOST,
-            port=CH_PORT,
-            username=CH_USER,
-            password=CH_PASSWORD,
-            database=CH_DATABASE,
-            secure=is_secure,
-            verify=False
-        )
+        try:
+            return clickhouse_connect.get_client(
+                host=CH_HOST,
+                port=CH_PORT,
+                username=CH_USER,
+                password=CH_PASSWORD,
+                database=CH_DATABASE,
+                secure=is_secure,
+                verify=False
+            )
+        except Exception as e:
+            # If SSL fails but it's port 8124, try without secure flag just in case
+            if is_secure:
+                return clickhouse_connect.get_client(
+                    host=CH_HOST,
+                    port=CH_PORT,
+                    username=CH_USER,
+                    password=CH_PASSWORD,
+                    database=CH_DATABASE,
+                    secure=False,
+                    verify=False
+                )
+            raise e
 
     def query_entity(self, entity_name, params):
         client = self.get_client()

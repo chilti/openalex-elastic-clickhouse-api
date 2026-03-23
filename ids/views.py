@@ -104,24 +104,28 @@ def works_id_get(id):
     only_fields = process_id_only_fields(request, WorksSchema)
     
     if settings.USE_CLICKHOUSE:
-        ch = get_clickhouse_backend()
-        id_type = "id"
-        if id.startswith("doi:") or ("doi" in id):
-            id_type = "doi"
-            from ids.utils import normalize_doi
-            clean_doi = normalize_doi(id, return_none_if_error=True)
-            id = f"https://doi.org/{clean_doi}"
-        elif id.startswith("pmid:"):
-            id_type = "pmid"
-            id = id.replace("pmid:", "")
-        
-        result = ch.get_item_by_id("works", id, id_type)
-        if not result:
-            abort(404)
-        works_schema = WorksSchema(
-            context={"display_relevance": False, "single_record": True}, only=only_fields
-        )
-        return works_schema.dump(result)
+        try:
+            ch = get_clickhouse_backend()
+            id_type = "id"
+            ch_id = id
+            if id.startswith("doi:") or ("doi" in id):
+                id_type = "doi"
+                from ids.utils import normalize_doi
+                clean_doi = normalize_doi(id, return_none_if_error=True)
+                ch_id = f"https://doi.org/{clean_doi}"
+            elif id.startswith("pmid:"):
+                id_type = "pmid"
+                ch_id = id.replace("pmid:", "")
+            
+            result = ch.get_item_by_id("works", ch_id, id_type)
+            if result:
+                works_schema = WorksSchema(
+                    context={"display_relevance": False, "single_record": True}, only=only_fields
+                )
+                return works_schema.dump(result)
+        except Exception as e:
+            from flask import current_app
+            current_app.logger.error(f"ClickHouse request failed, falling back to ES: {e}")
 
     s = Search(index=index_name, using=connection)
 
@@ -351,31 +355,34 @@ def authors_id_get(id):
     s = Search(index=index_name, using=connection)
     only_fields = process_id_only_fields(request, AuthorsSchema)
     if settings.USE_CLICKHOUSE:
-        ch = get_clickhouse_backend()
-        id_type = "id"
-        if id.startswith("orcid:") or id.startswith("https://orcid.org"):
-            id_type = "orcid"
-            from ids.utils import normalize_orcid
-            id = normalize_orcid(id)
-        elif id.startswith("mag:"):
-            id = id.replace("mag:", "")
-            id = f"A{id}"
-        
-        result = ch.get_item_by_id("authors", id, id_type)
-        if not result:
-            abort(404)
-        
-        authors_schema = AuthorsSchema(
-            context={"display_relevance": False}, only=only_fields
-        )
-        if is_ui_format():
-            json_output = json.dumps(dict(authors_schema.dump(result)))
-            ui_format = format_as_ui("authors", json_output)
-            return jsonify({
-                "meta": {"count": 1, "page": 1, "per_page": 1},
-                "props": ui_format
-            })
-        return authors_schema.dump(result)
+        try:
+            ch = get_clickhouse_backend()
+            id_type = "id"
+            ch_id = id
+            if id.startswith("orcid:") or id.startswith("https://orcid.org"):
+                id_type = "orcid"
+                from ids.utils import normalize_orcid
+                ch_id = normalize_orcid(id)
+            elif id.startswith("mag:"):
+                ch_id = id.replace("mag:", "")
+                ch_id = f"A{ch_id}"
+            
+            result = ch.get_item_by_id("authors", ch_id, id_type)
+            if result:
+                authors_schema = AuthorsSchema(
+                    context={"display_relevance": False}, only=only_fields
+                )
+                if is_ui_format():
+                    json_output = json.dumps(dict(authors_schema.dump(result)))
+                    ui_format = format_as_ui("authors", json_output)
+                    return jsonify({
+                        "meta": {"count": 1, "page": 1, "per_page": 1},
+                        "props": ui_format
+                    })
+                return authors_schema.dump(result)
+        except Exception as e:
+            from flask import current_app
+            current_app.logger.error(f"ClickHouse request failed, falling back to ES: {e}")
 
     s = Search(index=index_name, using=connection)
     if is_openalex_id(id):
@@ -455,32 +462,35 @@ def institutions_id_get(id):
     only_fields = process_id_only_fields(request, InstitutionsSchema)
 
     if settings.USE_CLICKHOUSE:
-        ch = get_clickhouse_backend()
-        id_type = "id"
-        if id.startswith("ror:") or ("ror.org" in id):
-            id_type = "ror"
-            from ids.utils import normalize_ror
-            id = normalize_ror(id)
-        elif id.startswith("wikidata:") or ("wikidata" in id):
-            id_type = "wikidata"
-            from ids.utils import normalize_wikidata
-            id = normalize_wikidata(id)
-        elif id.startswith("mag:"):
-            id = id.replace("mag:", "")
-            id = f"I{id}"
-        
-        result = ch.get_item_by_id("institutions", id, id_type)
-        if not result:
-            abort(404)
-        
-        institutions_schema = InstitutionsSchema(
-            context={"display_relevance": False}, only=only_fields
-        )
-        if is_ui_format():
-            json_output = json.dumps(dict(institutions_schema.dump(result)))
-            ui_format = format_as_ui("institutions", json_output)
-            return jsonify(ui_format)
-        return institutions_schema.dump(result)
+        try:
+            ch = get_clickhouse_backend()
+            id_type = "id"
+            ch_id = id
+            if id.startswith("ror:") or ("ror.org" in id):
+                id_type = "ror"
+                from ids.utils import normalize_ror
+                ch_id = normalize_ror(id)
+            elif id.startswith("wikidata:") or ("wikidata" in id):
+                id_type = "wikidata"
+                from ids.utils import normalize_wikidata
+                ch_id = normalize_wikidata(id)
+            elif id.startswith("mag:"):
+                ch_id = id.replace("mag:", "")
+                ch_id = f"I{ch_id}"
+            
+            result = ch.get_item_by_id("institutions", ch_id, id_type)
+            if result:
+                institutions_schema = InstitutionsSchema(
+                    context={"display_relevance": False}, only=only_fields
+                )
+                if is_ui_format():
+                    json_output = json.dumps(dict(institutions_schema.dump(result)))
+                    ui_format = format_as_ui("institutions", json_output)
+                    return jsonify(ui_format)
+                return institutions_schema.dump(result)
+        except Exception as e:
+            from flask import current_app
+            current_app.logger.error(f"ClickHouse request failed, falling back to ES: {e}")
 
     s = Search(index=settings.INSTITUTIONS_INDEX, using=connection)
     if is_openalex_id(id):

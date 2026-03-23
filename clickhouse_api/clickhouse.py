@@ -241,8 +241,8 @@ class ClickHouseBackend:
     def get_item_by_id(self, entity_name, id_value, id_type="id"):
         client = self.get_client()
         table_name = f"`{entity_name}`"
-        from core.utils import get_full_openalex_id, normalize_doi
-        from ids.utils import normalize_ror, normalize_orcid, normalize_wikidata
+        from core.utils import get_full_openalex_id
+        from ids.utils import normalize_ror, normalize_orcid, normalize_wikidata, normalize_doi
         
         where_clause = ""
         if id_type == "id":

@@ -241,27 +241,36 @@ class ClickHouseBackend:
     def get_item_by_id(self, entity_name, id_value, id_type="id"):
         client = self.get_client()
         table_name = f"`{entity_name}`"
+        from core.utils import get_full_openalex_id, normalize_doi
+        from ids.utils import normalize_ror, normalize_orcid, normalize_wikidata
         
         where_clause = ""
         if id_type == "id":
-            if not id_value.startswith("http"):
-                # ClickHouse 'id' column contains full URLs (e.g., https://openalex.org/W...)
+            full_id = get_full_openalex_id(id_value)
+            if full_id:
+                id_value = full_id
+            elif not id_value.startswith("http"):
                 id_value = f"https://openalex.org/{id_value}"
             where_clause = f"id = '{id_value}'"
         elif id_type == "doi":
-            # Using the new 'doi' column for 1000x better performance
+            clean_doi = normalize_doi(id_value, return_none_if_error=True)
+            if clean_doi:
+                id_value = f"https://doi.org/{clean_doi}"
             where_clause = f"doi = '{id_value}'"
         elif id_type == "ror":
-            if not id_value.startswith("http"):
-                id_value = f"https://ror.org/{id_value}"
+            clean_ror = normalize_ror(id_value)
+            if clean_ror:
+                id_value = f"https://ror.org/{clean_ror}"
             where_clause = f"ror = '{id_value}'"
         elif id_type == "orcid":
-            if not id_value.startswith("http"):
-                id_value = f"https://orcid.org/{id_value}"
+            clean_orcid = normalize_orcid(id_value)
+            if clean_orcid:
+                id_value = f"https://orcid.org/{clean_orcid}"
             where_clause = f"orcid = '{id_value}'"
         elif id_type == "wikidata":
-            if not id_value.startswith("http"):
-                id_value = f"https://www.wikidata.org/wiki/{id_value}"
+            clean_wiki = normalize_wikidata(id_value)
+            if clean_wiki:
+                id_value = f"https://www.wikidata.org/wiki/{clean_wiki}"
             where_clause = f"JSONExtractString(raw_data, 'ids', 'wikidata') = '{id_value}'"
         elif id_type == "pmid":
              where_clause = f"JSONExtractString(raw_data, 'ids', 'pmid') = '{id_value}'"

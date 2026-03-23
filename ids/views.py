@@ -55,6 +55,7 @@ from subfields.schemas import SubfieldsSchema
 from topics.schemas import TopicsSchema
 from work_types.schemas import TypesSchema
 from works.schemas import WorksSchema
+from clickhouse_api.clickhouse import get_clickhouse_backend
 
 blueprint = Blueprint("ids", __name__)
 
@@ -103,7 +104,6 @@ def works_id_get(id):
     only_fields = process_id_only_fields(request, WorksSchema)
     
     if settings.USE_CLICKHOUSE:
-        from clickhouse_api.clickhouse import get_clickhouse_backend
         ch = get_clickhouse_backend()
         id_type = "id"
         if id.startswith("doi:") or ("doi" in id):
@@ -188,7 +188,6 @@ def works_v2_id_get(id):
     only_fields = process_id_only_fields(request, WorksSchema)
 
     if settings.USE_CLICKHOUSE:
-        from clickhouse_api.clickhouse import get_clickhouse_backend
         ch = get_clickhouse_backend()
         id_type = "id"
         if id.startswith("doi:") or ("doi" in id):
@@ -352,7 +351,6 @@ def authors_id_get(id):
     s = Search(index=index_name, using=connection)
     only_fields = process_id_only_fields(request, AuthorsSchema)
     if settings.USE_CLICKHOUSE:
-        from clickhouse_api.clickhouse import get_clickhouse_backend
         ch = get_clickhouse_backend()
         id_type = "id"
         if id.startswith("orcid:") or id.startswith("https://orcid.org"):

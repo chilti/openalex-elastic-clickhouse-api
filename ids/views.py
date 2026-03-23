@@ -127,64 +127,62 @@ def works_id_get(id):
             from flask import current_app
             current_app.logger.error(f"ClickHouse request failed, falling back to ES: {e}")
 
-    s = Search(index=index_name, using=connection)
+    try:
+        s = Search(index=index_name, using=connection)
 
-    if is_openalex_id(id):
-        clean_id = normalize_openalex_id(id)
-        if clean_id != id:
+        if is_openalex_id(id):
+            clean_id = normalize_openalex_id(id)
+            if clean_id != id:
+                return redirect(url_for("ids.works_id_get", id=clean_id, **request.args))
+            clean_id_int = int(clean_id[1:])
+            full_openalex_id = f"https://openalex.org/W{clean_id_int}"
+
+            query = Q("term", ids__openalex=full_openalex_id)
+            s = s.filter(query)
+        elif id.startswith("mag:"):
+            clean_id = id.replace("mag:", "")
+            clean_id = f"W{clean_id}"
             return redirect(url_for("ids.works_id_get", id=clean_id, **request.args))
-        clean_id = int(clean_id[1:])
-        full_openalex_id = f"https://openalex.org/W{clean_id}"
-
-        query = Q("term", ids__openalex=full_openalex_id)
-        s = s.filter(query)
-    elif id.startswith("mag:"):
-        clean_id = id.replace("mag:", "")
-        clean_id = f"W{clean_id}"
-        return redirect(url_for("ids.works_id_get", id=clean_id, **request.args))
-    elif id.startswith("pmid:"):
-        id = id.replace("pmid:", "")
-        clean_pmid = normalize_pmid(id)
-        full_pmid = f"https://pubmed.ncbi.nlm.nih.gov/{clean_pmid}"
-        query = Q("term", ids__pmid=full_pmid)
-        s = s.filter(query)
-    elif id.startswith("pmcid:"):
-        id = id.replace("pmcid:", "")
-        clean_pmcid = normalize_pmcid(id)
-        full_pmcid = f"https://www.ncbi.nlm.nih.gov/pmc/articles/{clean_pmcid}"
-        query = Q("term", ids__pmcid=full_pmcid)
-        s = s.filter(query)
-    elif id.startswith("doi:") or ("doi" in id):
-        clean_doi = normalize_doi(id, return_none_if_error=True)
-        if not clean_doi:
+        elif id.startswith("pmid:"):
+            clean_id = id.replace("pmid:", "")
+            from ids.utils import normalize_pmid
+            clean_pmid = normalize_pmid(clean_id)
+            full_pmid = f"https://pubmed.ncbi.nlm.nih.gov/{clean_pmid}"
+            query = Q("term", ids__pmid=full_pmid)
+            s = s.filter(query)
+        elif id.startswith("pmcid:"):
+            clean_id = id.replace("pmcid:", "")
+            from ids.utils import normalize_pmcid
+            clean_pmcid = normalize_pmcid(clean_id)
+            full_pmcid = f"https://www.ncbi.nlm.nih.gov/pmc/articles/{clean_pmcid}"
+            query = Q("term", ids__pmcid=full_pmcid)
+            s = s.filter(query)
+        elif id.startswith("doi:") or ("doi" in id):
+            from ids.utils import normalize_doi
+            clean_doi = normalize_doi(id, return_none_if_error=True)
+            if not clean_doi:
+                abort(404)
+            full_doi = f"https://doi.org/{clean_doi}"
+            query = Q("term", ids__doi=full_doi)
+            s = s.filter(query)
+        else:
             abort(404)
-        full_doi = f"https://doi.org/{clean_doi}"
-        query = Q("term", ids__doi=full_doi)
-        s = s.filter(query)
-    else:
-        abort(404)
 
-    response = s.execute()
-        
-    if not response:
+        s = s.source(only_fields)
+        response = s.execute()
+
+        if response.hits.total.value > 0:
+            result = response.hits[0]
+            works_schema = WorksSchema(
+                context={"display_relevance": False, "single_record": True}, only=only_fields
+            )
+            return works_schema.dump(result)
+        else:
+            abort(404)
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.error(f"Elasticsearch fallback failed for {id}: {e}")
         abort(404)
-    works_schema = WorksSchema(
-        context={"display_relevance": False, "single_record": True}, only=only_fields
-    )
-    if is_ui_format():
-        json_output = json.dumps(dict(works_schema.dump(response[0])))
-        ui_format = format_as_ui("works", json_output)
-        return jsonify(
-            {
-                "meta": {
-                    "count": 1,
-                    "page": 1,
-                    "per_page": 1,
-                },
-                "props": ui_format,
-            }
-        )
-    return works_schema.dump(response[0])
 
 
 @blueprint.route("/v2/works/<path:id>")
@@ -352,7 +350,6 @@ def authors_id_get(id):
     connection = get_data_version_connection(request)
     index_name = settings.AUTHORS_INDEX_WALDEN if connection == 'walden' else settings.AUTHORS_INDEX_LEGACY
 
-    s = Search(index=index_name, using=connection)
     only_fields = process_id_only_fields(request, AuthorsSchema)
     if settings.USE_CLICKHOUSE:
         try:
@@ -384,55 +381,60 @@ def authors_id_get(id):
             from flask import current_app
             current_app.logger.error(f"ClickHouse request failed, falling back to ES: {e}")
 
-    s = Search(index=index_name, using=connection)
-    if is_openalex_id(id):
-        clean_id = normalize_openalex_id(id)
-        if clean_id != id:
+    try:
+        s = Search(index=index_name, using=connection)
+        if is_openalex_id(id):
+            clean_id = normalize_openalex_id(id)
+            if clean_id != id:
+                return redirect(url_for("ids.authors_id_get", id=clean_id, **request.args))
+            clean_id_int = int(clean_id[1:])
+            full_openalex_id = f"https://openalex.org/A{clean_id_int}"
+
+            query = Q("term", ids__openalex=full_openalex_id)
+            s = s.filter(query)
+        elif id.startswith("orcid:") or id.startswith("https://orcid.org"):
+            from ids.utils import normalize_orcid
+            clean_orcid = normalize_orcid(id)
+            full_orcid = f"https://orcid.org/{clean_orcid}"
+            query = Q("term", ids__orcid=full_orcid)
+            s = s.filter(query)
+        elif id.startswith("mag:"):
+            clean_id = id.replace("mag:", "")
+            clean_id = f"A{clean_id}"
             return redirect(url_for("ids.authors_id_get", id=clean_id, **request.args))
-        author_id = int(clean_id[1:])
-        full_author_id = f"https://openalex.org/A{author_id}"
-        query = Q("term", ids__openalex=full_author_id)
-        s = s.filter(query)
-    elif id.startswith("mag:"):
-        clean_id = id.replace("mag:", "")
-        clean_id = f"A{clean_id}"
-        return redirect(url_for("ids.authors_id_get", id=clean_id, **request.args))
-    elif id.startswith("orcid:") or id.startswith("https://orcid.org"):
-        clean_orcid = normalize_orcid(id)
-        if not clean_orcid:
-            return abort(404)
-        full_orcid = f"https://orcid.org/{clean_orcid}"
-        query = Q("term", ids__orcid=full_orcid)
-        s = s.filter(query)
-    elif id.startswith("scopus:") or id.startswith("https://www.scopus.com"):
-        scopus_id = id.replace("scopus:", "")
-        clean_scopus = normalize_scopus_id(scopus_id)
-        if not clean_scopus:
-            return abort(404)
-        query = Q("term", ids__scopus__keyword=clean_scopus)
-        s = s.filter(query)
-    else:
+        elif id.startswith("scopus:") or id.startswith("https://www.scopus.com"):
+            from ids.utils import normalize_scopus_id
+            scopus_id_part = id.replace("scopus:", "")
+            clean_scopus = normalize_scopus_id(scopus_id_part)
+            if not clean_scopus:
+                return abort(404)
+            query = Q("term", ids__scopus__keyword=clean_scopus)
+            s = s.filter(query)
+        else:
+            abort(404)
+
+        s = s.source(only_fields)
+        response = s.execute()
+
+        if response.hits.total.value > 0:
+            result = response.hits[0]
+            authors_schema = AuthorsSchema(
+                context={"display_relevance": False}, only=only_fields
+            )
+            if is_ui_format():
+                json_output = json.dumps(dict(authors_schema.dump(result)))
+                ui_format = format_as_ui("authors", json_output)
+                return jsonify({
+                    "meta": {"count": 1, "page": 1, "per_page": 1},
+                    "props": ui_format
+                })
+            return authors_schema.dump(result)
+        else:
+            abort(404)
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.error(f"Elasticsearch fallback failed for author {id}: {e}")
         abort(404)
-    response = s.execute()
-    if not response:
-        abort(404)
-    authors_schema = AuthorsSchema(
-        context={"display_relevance": False}, only=only_fields
-    )
-    if is_ui_format():
-        json_output = json.dumps(dict(authors_schema.dump(response[0])))
-        ui_format = format_as_ui("authors", json_output)
-        return jsonify(
-            {
-                "meta": {
-                    "count": 1,
-                    "page": 1,
-                    "per_page": 1,
-                },
-                "props": ui_format,
-            }
-        )
-    return authors_schema.dump(response[0])
 
 
 # Institution
@@ -457,8 +459,6 @@ def institutions_random_get():
 @blueprint.route("/entities/institutions/<path:id>")
 def institutions_id_get(id):
     connection = get_data_version_connection(request)
-
-    s = Search(index=settings.INSTITUTIONS_INDEX, using=connection)
     only_fields = process_id_only_fields(request, InstitutionsSchema)
 
     if settings.USE_CLICKHOUSE:
@@ -492,63 +492,55 @@ def institutions_id_get(id):
             from flask import current_app
             current_app.logger.error(f"ClickHouse request failed, falling back to ES: {e}")
 
-    s = Search(index=settings.INSTITUTIONS_INDEX, using=connection)
-    if is_openalex_id(id):
-        clean_id = normalize_openalex_id(id)
-        if clean_id != id:
-            return redirect(
-                url_for("ids.institutions_id_get", id=clean_id, **request.args)
+    try:
+        s = Search(index=settings.INSTITUTIONS_INDEX, using=connection)
+        if is_openalex_id(id):
+            clean_id = normalize_openalex_id(id)
+            if clean_id != id:
+                return redirect(url_for("ids.institutions_id_get", id=clean_id, **request.args))
+            clean_id_int = int(clean_id[1:])
+            full_openalex_id = f"https://openalex.org/I{clean_id_int}"
+
+            query = Q("term", ids__openalex=full_openalex_id)
+            s = s.filter(query)
+        elif id.startswith("ror:") or ("ror.org" in id):
+            from ids.utils import normalize_ror
+            clean_ror = normalize_ror(id)
+            full_ror = f"https://ror.org/{clean_ror}"
+            query = Q("term", ror=full_ror)
+            s = s.filter(query)
+        elif id.startswith("wikidata:") or ("wikidata" in id):
+            from ids.utils import normalize_wikidata
+            clean_wikidata = normalize_wikidata(id)
+            full_wikidata = f"https://www.wikidata.org/wiki/{clean_wikidata}"
+            query = Q("term", ids__wikidata=full_wikidata)
+            s = s.filter(query)
+        elif id.startswith("mag:"):
+            clean_id = id.replace("mag:", "")
+            clean_id = f"I{clean_id}"
+            return redirect(url_for("ids.institutions_id_get", id=clean_id, **request.args))
+        else:
+            abort(404)
+
+        s = s.source(only_fields)
+        response = s.execute()
+
+        if response.hits.total.value > 0:
+            result = response.hits[0]
+            institutions_schema = InstitutionsSchema(
+                context={"display_relevance": False}, only=only_fields
             )
-        clean_id = int(clean_id[1:])
-        full_openalex_id = f"https://openalex.org/I{clean_id}"
-        query = Q("term", ids__openalex=full_openalex_id)
-        s = s.filter(query)
-        response = s.execute()
-    elif id.startswith("mag:"):
-        clean_id = id.replace("mag:", "")
-        clean_id = f"I{clean_id}"
-        return redirect(url_for("ids.institutions_id_get", id=clean_id, **request.args))
-    elif id.startswith("ror:") or ("ror.org" in id):
-        clean_ror = normalize_ror(id)
-        if not clean_ror:
+            if is_ui_format():
+                json_output = json.dumps(dict(institutions_schema.dump(result)))
+                ui_format = format_as_ui("institutions", json_output)
+                return jsonify(ui_format)
+            return institutions_schema.dump(result)
+        else:
             abort(404)
-        full_ror = f"https://ror.org/{clean_ror}"
-        query = Q("term", ror=full_ror)
-        s = s.filter(query)
-        response = s.execute()
-    elif id.startswith("wikidata:") or ("wikidata" in id):
-        clean_wikidata = normalize_wikidata(id)
-        if not clean_wikidata:
-            abort(404)
-        full_wikidata = f"https://www.wikidata.org/wiki/{clean_wikidata}"
-        query = Q("term", ids__wikidata=full_wikidata)
-        s = s.filter(query)
-        response = s.execute()
-    else:
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.error(f"Elasticsearch fallback failed for institution {id}: {e}")
         abort(404)
-
-    if not response.hits:
-        abort(404)
-    
-    result = response[0]
-
-    institutions_schema = InstitutionsSchema(
-        context={"display_relevance": False}, only=only_fields
-    )
-    if is_ui_format():
-        json_output = json.dumps(dict(institutions_schema.dump(response[0])))
-        ui_format = format_as_ui("institutions", json_output)
-        return jsonify(
-            {
-                "meta": {
-                    "count": 1,
-                    "page": 1,
-                    "per_page": 1,
-                },
-                "props": ui_format,
-            }
-        )
-    return institutions_schema.dump(response[0])
 
 
 # Concept

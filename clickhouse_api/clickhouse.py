@@ -33,12 +33,16 @@ class AttrDict(dict):
 
 class ClickHouseBackend:
     def get_client(self):
+        # Auto-enable secure connection for port 8124
+        is_secure = (CH_PORT == 8124)
         return clickhouse_connect.get_client(
             host=CH_HOST,
             port=CH_PORT,
             username=CH_USER,
             password=CH_PASSWORD,
-            database=CH_DATABASE
+            database=CH_DATABASE,
+            secure=is_secure,
+            verify=False
         )
 
     def query_entity(self, entity_name, params):

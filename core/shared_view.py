@@ -49,10 +49,14 @@ def shared_view(request, fields_dict, index_name, default_sort, connection=None,
         return vector_semantic_search(params, index_name, connection)
 
     if settings.USE_CLICKHOUSE:
-        # Determine entity from index name (e.g., 'works-v33' -> 'works')
-        entity_name = index_name.split('-')[0]
-        ch = get_clickhouse_backend()
-        return ch.query_entity(entity_name, params)
+        try:
+            # Determine entity from index name (e.g., 'works-v33' -> 'works')
+            entity_name = index_name.split('-')[0]
+            ch = get_clickhouse_backend()
+            return ch.query_entity(entity_name, params)
+        except Exception as e:
+            from flask import current_app
+            current_app.logger.error(f"ClickHouse search failed, falling back to ES: {e}")
 
     s = construct_query(params, fields_dict, index_name, default_sort, connection)
     response = execute_search(s, params)

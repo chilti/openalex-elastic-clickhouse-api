@@ -92,6 +92,23 @@ def optimize():
             except Exception as e:
                 logger.error(f"  Failed to materialize column '{col_name}' in '{table}': {e}")
 
+    # 3. Add Skip Indexes for performance
+    indices = {
+        "works": [("doi_idx", "doi", "bloom_filter(0.01)", "1")],
+        "institutions": [("ror_idx", "ror", "bloom_filter(0.01)", "1")]
+    }
+    
+    for table, table_indices in indices.items():
+        if table not in existing_tables: continue
+        for idx_name, col_name, idx_type, granularity in table_indices:
+            try:
+                logger.info(f"  Adding index '{idx_name}' on '{col_name}' in '{table}'...")
+                client.command(f"ALTER TABLE `{table}` ADD INDEX IF NOT EXISTS `{idx_name}` `{col_name}` TYPE {idx_type} GRANULARITY {granularity}")
+                logger.info(f"  Materializing index '{idx_name}' in '{table}'...")
+                client.command(f"ALTER TABLE `{table}` MATERIALIZE INDEX `{idx_name}`")
+            except Exception as e:
+                logger.error(f"  Failed to add index '{idx_name}' to '{table}': {e}")
+
     logger.info("Optimization process complete!")
 
 if __name__ == "__main__":

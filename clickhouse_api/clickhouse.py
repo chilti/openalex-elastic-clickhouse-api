@@ -85,14 +85,26 @@ class ClickHouseBackend:
                 where_clauses.append(f"`title` ILIKE '%{escaped_search}%'")
         
         # Handle filters (simplified)
-        filters = params.get("filters")
-        if filters:
+            # Map OpenAlex filter names to ClickHouse materialized columns
+            filter_map = {
+                "institutions.ror": "ror",
+                "authorships.author.orcid": "orcid",
+                "authorships.institutions.ror": "ror",
+                "authors.orcid": "orcid",
+                "id": "id",
+                "doi": "doi"
+            }
+            
             # Columns we have materialized for better performance
             materialized_cols = ["doi", "title", "publication_year", "cited_by_count", "is_oa", "is_xpac", "type", "updated_date", 
                                  "display_name", "orcid", "ror", "works_count", "issn_l", "level"]
             
             for f in filters:
                 for key, value in f.items():
+                    # Map nested keys to materialized columns if possible
+                    if key in filter_map:
+                        key = filter_map[key]
+
                     # Handle date aliases
                     op = "="
                     if key == "from_publication_date":
@@ -233,12 +245,17 @@ class ClickHouseBackend:
         
         # Optional: query for total count (might be slow)
         total_count = 0
-        try:
-            # If there's no complex where, count() is instant in ClickHouse
-            count_result = client.query(count_sql)
-            total_count = count_result.first_row[0]
-        except Exception as e:
-            logger.warning(f"Failed to get total count: {e}")
+        skip_count = params.get("skip_count") == "true" or params.get("per_page") == "1"
+        
+        if not skip_count:
+            try:
+                # If there's no complex where, count() is instant in ClickHouse
+                count_result = client.query(count_sql)
+                total_count = count_result.first_row[0]
+            except Exception as e:
+                logger.warning(f"Failed to get total count: {e}")
+                total_count = len(result.result_rows)
+        else:
             total_count = len(result.result_rows)
 
         records = []

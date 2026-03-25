@@ -3,8 +3,8 @@ import logging
 import clickhouse_connect
 from dotenv import load_dotenv
 
-# Load from existing .env
-env_path = r'c:\Users\jlja\Documents\Proyectos\openalex-elastic-api\clickhouse_api\.env'
+# Load from existing .env in same directory
+env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
 
 CH_HOST = os.environ.get('CH_HOST', '10.90.0.87')

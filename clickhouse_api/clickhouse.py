@@ -86,13 +86,15 @@ class ClickHouseBackend:
         
         # Handle filters (simplified)
             # Map OpenAlex filter names to ClickHouse materialized columns
+            # Only map keys that are direct top-level columns in the target entity table
             filter_map = {
-                "institutions.ror": "ror",
-                "authorships.author.orcid": "orcid",
-                "authorships.institutions.ror": "ror",
-                "authors.orcid": "orcid",
                 "id": "id",
                 "doi": "doi"
+            }
+            # Keys that require raw_data LIKE search (nested array fields)
+            raw_data_like_keys = {
+                "institutions.ror", "authorships.institutions.ror",
+                "authorships.author.orcid", "authors.orcid"
             }
             
             # Columns we have materialized for better performance
@@ -101,7 +103,15 @@ class ClickHouseBackend:
             
             for f in filters:
                 for key, value in f.items():
-                    # Map nested keys to materialized columns if possible
+                    # Handle nested array filters with raw_data LIKE (inexact but functional)
+                    if key in raw_data_like_keys:
+                        # Extract just the ID part (e.g. '00kgetx37' from full ROR URL)
+                        val_str = str(value)
+                        escaped_val = val_str.replace("'", "''")
+                        where_clauses.append(f"raw_data LIKE '%{escaped_val}%'")
+                        continue
+
+                    # Map top-level keys to materialized columns if applicable
                     if key in filter_map:
                         key = filter_map[key]
 

@@ -12,7 +12,7 @@ services:
       - REDISCLOUD_URL=redis://redis:6379/0
       - REDIS_DO_URL=redis://redis:6379/1
     ports:
-      - "127.0.0.1:5009:5000"
+      - "127.0.0.1:5012:5000"
     depends_on:
       - redis
     extra_hosts:
@@ -25,6 +25,6 @@ services:
       - "127.0.0.1:6379:6379"
     volumes:
       - /mnt/expansion/dockers_drives/redis_data:/data
-    command: ["redis-server", "--appendonly", "yes"]
+    command: [ "redis-server", "--appendonly", "yes" ]
 
 # Usando bind mounts en /mnt/expansion/dockers_drives/

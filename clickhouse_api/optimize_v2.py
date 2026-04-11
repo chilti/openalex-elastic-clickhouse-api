@@ -42,8 +42,8 @@ def optimize():
             ("type", "String"),
             ("source_id", "String", "JSONExtractString(raw_data, 'primary_location', 'source', 'id')"),
             ("author_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> [x.1.1, x.2], JSONExtract(raw_data, 'authorships', 'Array(Tuple(author Tuple(display_name String), raw_author_name String))'))))"),
-            ("institution_rors", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.1, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(ror String))))'))))"),
-            ("institution_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.2, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, display_name String))))'))))"),
+            ("institution_rors", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.1, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, String))))'))))"),
+            ("institution_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.2, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, String))))'))))"),
             ("updated_date", "String")
         ],
         "institutions": [

@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    network_mode: host
+    volumes:
+      - .:/app
+    env_file:
+      - clickhouse_api/.env
+    environment:
+      - USE_CLICKHOUSE=true
+      - REDISCLOUD_URL=redis://localhost:6379/0
+      - REDIS_DO_URL=redis://localhost:6379/1
+    command: ["gunicorn", "--bind", "0.0.0.0:5012", "--workers", "4", "--timeout", "300", "app:app"]
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    user: "0:0"
+    network_mode: host
+    volumes:
+      - /mnt/expansion/dockers_drives/redis_data:/data
+    command: [ "redis-server", "--appendonly", "yes" ]

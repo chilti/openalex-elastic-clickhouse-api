@@ -40,6 +40,10 @@ def optimize():
             ("is_oa", "String", "JSONExtractString(raw_data, 'open_access', 'is_oa')"),
             ("is_xpac", "String", "JSONExtractString(raw_data, 'is_xpac')"),
             ("type", "String"),
+            ("source_id", "String", "JSONExtractString(raw_data, 'primary_location', 'source', 'id')"),
+            ("author_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> [x.1.1, x.2], JSONExtract(raw_data, 'authorships', 'Array(Tuple(author Tuple(display_name String), raw_author_name String))'))))"),
+            ("institution_rors", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.1, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(ror String))))'))))"),
+            ("institution_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.2, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, display_name String))))'))))"),
             ("updated_date", "String")
         ],
         "institutions": [
@@ -94,8 +98,20 @@ def optimize():
 
     # 3. Add Skip Indexes for performance
     indices = {
-        "works": [("doi_idx", "doi", "bloom_filter(0.01)", "1")],
-        "institutions": [("ror_idx", "ror", "bloom_filter(0.01)", "1")]
+        "works": [
+            ("doi_idx", "doi", "bloom_filter(0.01)", "1"),
+            ("source_id_idx", "source_id", "bloom_filter(0.01)", "1"),
+            ("author_names_idx", "author_names", "tokenbf_v1(512, 3, 0)", "1"),
+            ("inst_rors_idx", "institution_rors", "bloom_filter(0.01)", "1"),
+            ("inst_names_idx", "institution_names", "tokenbf_v1(512, 3, 0)", "1")
+        ],
+        "institutions": [
+            ("ror_idx", "ror", "bloom_filter(0.01)", "1"),
+            ("inst_name_idx", "display_name", "ngrambf_v1(4, 1024, 2, 1)", "1")
+        ],
+        "authors": [
+            ("auth_name_idx", "display_name", "ngrambf_v1(4, 1024, 2, 1)", "1")
+        ]
     }
     
     for table, table_indices in indices.items():

@@ -85,21 +85,30 @@ class ClickHouseBackend:
                 where_clauses.append(f"`title` ILIKE '%{escaped_search}%'")
         
         # Handle filters (simplified)
+        filters = params.get("filters", [])
+        if filters:
             # Map OpenAlex filter names to ClickHouse materialized columns
             # Only map keys that are direct top-level columns in the target entity table
             filter_map = {
                 "id": "id",
-                "doi": "doi"
+                "doi": "doi",
+                "primary_location.source.id": "source_id",
+                "institutions.ror": "institution_rors",
+                "authorships.institutions.ror": "institution_rors",
+                "raw_author_names": "author_names",
+                "authorships.author.display_name": "author_names",
+                "authorships.raw_author_name": "author_names",
+                "institutions.display_name": "institution_names"
             }
             # Keys that require raw_data LIKE search (nested array fields)
             raw_data_like_keys = {
-                "institutions.ror", "authorships.institutions.ror",
                 "authorships.author.orcid", "authors.orcid"
             }
             
             # Columns we have materialized for better performance
             materialized_cols = ["doi", "title", "publication_year", "cited_by_count", "is_oa", "is_xpac", "type", "updated_date", 
-                                 "display_name", "orcid", "ror", "works_count", "issn_l", "level"]
+                                 "display_name", "orcid", "ror", "works_count", "issn_l", "level", "source_id", 
+                                 "author_names", "institution_rors", "institution_names"]
             
             for f in filters:
                 for key, value in f.items():
@@ -176,6 +185,29 @@ class ClickHouseBackend:
                     # Construct the SQL clause
                     if key in materialized_cols or key == "id":
                         col_name = f"`{key}`" if key != "id" else "id"
+                        
+                        # Handle array columns specifically
+                        if key in ["author_names", "institution_rors", "institution_names"]:
+                            if op == "=":
+                                if len(values) > 1:
+                                    vals_str = ",".join([f"'{v}'" for v in values])
+                                    where_clauses.append(f"hasAny({col_name}, [{vals_str}])")
+                                else:
+                                    escaped_v = str(values[0]).replace("'", "''")
+                                    where_clauses.append(f"has({col_name}, '{escaped_v}')")
+                            else:
+                                # For partial matches or other operators in arrays
+                                clauses = []
+                                for v in values:
+                                    escaped_v = str(v).replace("'", "''")
+                                    # Use ILIKE for partial array matching
+                                    clauses.append(f"arrayExists(x -> x ILIKE '%{escaped_v}%', {col_name})")
+                                if len(clauses) > 1:
+                                    where_clauses.append("(" + " OR ".join(clauses) + ")")
+                                else:
+                                    where_clauses.append(clauses[0])
+                            continue
+
                         if len(values) > 1 and op == "=":
                             vals_str = ",".join([f"'{v}'" for v in values])
                             where_clauses.append(f"{col_name} IN ({vals_str})")
@@ -218,6 +250,7 @@ class ClickHouseBackend:
                         else:
                             where_clauses.append(clauses[0])
 
+
         if where_clauses:
             where_part = " WHERE " + " AND ".join(where_clauses)
             sql += where_part
@@ -227,7 +260,7 @@ class ClickHouseBackend:
         sort = params.get("sort")
         if sort:
             # Columns we have materialized for better performance
-            materialized_cols = ["cited_by_count", "publication_year", "works_count", "title", "display_name"]
+            materialized_cols = ["cited_by_count", "publication_year", "works_count", "title", "display_name", "source_id"]
             sort_clauses = []
             for key, order in sort.items():
                 if key in materialized_cols:

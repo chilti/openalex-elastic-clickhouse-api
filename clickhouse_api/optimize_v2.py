@@ -41,9 +41,11 @@ def optimize():
             ("is_xpac", "String", "JSONExtractString(raw_data, 'is_xpac')"),
             ("type", "String"),
             ("source_id", "String", "JSONExtractString(raw_data, 'primary_location', 'source', 'id')"),
+            ("primary_topic_id", "String", "JSONExtractString(raw_data, 'primary_topic', 'id')"),
+            ("institution_ids", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.1, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, String, String))))'))))"),
             ("author_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> [x.1.1, x.2], JSONExtract(raw_data, 'authorships', 'Array(Tuple(author Tuple(display_name String), raw_author_name String))'))))"),
-            ("institution_rors", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.1, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, String))))'))))"),
-            ("institution_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.2, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, String))))'))))"),
+            ("institution_rors", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.1, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, String, String))))'))))"),
+            ("institution_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.2, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, String, String))))'))))"),
             ("updated_date", "String")
         ],
         "institutions": [

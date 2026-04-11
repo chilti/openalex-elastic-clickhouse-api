@@ -95,10 +95,11 @@ class ClickHouseBackend:
                 "primary_location.source.id": "source_id",
                 "institutions.ror": "institution_rors",
                 "authorships.institutions.ror": "institution_rors",
-                "raw_author_names": "author_names",
-                "authorships.author.display_name": "author_names",
-                "authorships.raw_author_name": "author_names",
-                "institutions.display_name": "institution_names"
+                "institutions.id": "institution_ids",
+                "authorships.institutions.id": "institution_ids",
+                "authorships.author.id": "author_ids",
+                "topics.id": "primary_topic_id",
+                "primary_topic.id": "primary_topic_id"
             }
             # Keys that require raw_data LIKE search (nested array fields)
             raw_data_like_keys = {
@@ -108,6 +109,7 @@ class ClickHouseBackend:
             # Columns we have materialized for better performance
             materialized_cols = ["doi", "title", "publication_year", "cited_by_count", "is_oa", "is_xpac", "type", "updated_date", 
                                  "display_name", "orcid", "ror", "works_count", "issn_l", "level", "source_id", 
+                                 "primary_topic_id", "institution_ids", "author_ids",
                                  "author_names", "institution_rors", "institution_names"]
             
             for f in filters:
@@ -160,14 +162,27 @@ class ClickHouseBackend:
                     # Handle pipe-separated multiple values (OR)
                     values = str(value).split("|")
                     
-                    # Special handling for 'id' to prepend URL if missing
-                    if key == "id":
-                        new_values = []
-                        for v in values:
-                            if not v.startswith("http"):
+                    # Normalize IDs based on field key
+                    is_oa_id_field = any(k in key for k in ["id", "source_id", "institution_id", "author_id", "topic_id"])
+                    is_doi_field = "doi" in key
+                    is_ror_field = "ror" in key
+
+                    new_values = []
+                    for v in values:
+                        v = v.strip()
+                        if not v.startswith("http"):
+                            # Handle OpenAlex IDs: W (Works), A (Authors), S (Sources), I (Institutions), T (Topics), C (Concepts)
+                            if is_oa_id_field and any(v.upper().startswith(p) for p in ["S", "I", "A", "W", "T", "C"]) and len(v) > 1 and v[1:].isdigit():
                                 v = f"https://openalex.org/{v}"
-                            new_values.append(v)
-                        values = new_values
+                            elif is_doi_field:
+                                v = f"https://doi.org/{v}"
+                            elif is_ror_field:
+                                if v.startswith("ror.org/"):
+                                    v = f"https://{v}"
+                                else:
+                                    v = f"https://ror.org/{v}"
+                        new_values.append(v)
+                    values = new_values
 
                     # Handle search fields in filters (e.g., title.search)
                     if key.endswith(".search"):
@@ -187,7 +202,7 @@ class ClickHouseBackend:
                         col_name = f"`{key}`" if key != "id" else "id"
                         
                         # Handle array columns specifically
-                        if key in ["author_names", "institution_rors", "institution_names"]:
+                        if key in ["author_names", "institution_rors", "institution_names", "institution_ids", "author_ids"]:
                             if op == "=":
                                 if len(values) > 1:
                                     vals_str = ",".join([f"'{v}'" for v in values])

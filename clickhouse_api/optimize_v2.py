@@ -19,15 +19,30 @@ logger = logging.getLogger(__name__)
 def optimize():
     try:
         is_secure = (CH_PORT == 8124)
-        client = clickhouse_connect.get_client(
-            host=CH_HOST,
-            port=CH_PORT,
-            username=CH_USER,
-            password=CH_PASSWORD,
-            database=CH_DATABASE,
-            secure=is_secure,
-            verify=False
-        )
+        try:
+            client = clickhouse_connect.get_client(
+                host=CH_HOST,
+                port=CH_PORT,
+                username=CH_USER,
+                password=CH_PASSWORD,
+                database=CH_DATABASE,
+                secure=is_secure,
+                verify=False
+            )
+        except Exception as e:
+            if is_secure:
+                logger.warning(f"Secure connection failed, retrying without SSL: {e}")
+                client = clickhouse_connect.get_client(
+                    host=CH_HOST,
+                    port=CH_PORT,
+                    username=CH_USER,
+                    password=CH_PASSWORD,
+                    database=CH_DATABASE,
+                    secure=False,
+                    verify=False
+                )
+            else:
+                raise e
         logger.info(f"Connected to ClickHouse: {CH_HOST}")
     except Exception as e:
         logger.error(f"Could not connect to ClickHouse: {e}")

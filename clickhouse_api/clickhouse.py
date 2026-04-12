@@ -110,7 +110,7 @@ class ClickHouseBackend:
             materialized_cols = ["doi", "title", "publication_year", "cited_by_count", "is_oa", "is_xpac", "type", "updated_date", 
                                  "display_name", "orcid", "ror", "works_count", "issn_l", "level", "source_id", 
                                  "primary_topic_id", "institution_ids", "author_ids",
-                                 "author_names", "institution_rors", "institution_names"]
+                                 "author_names", "institution_rors", "institution_names", "country_code"]
             
             for f in filters:
                 for key, value in f.items():
@@ -275,7 +275,7 @@ class ClickHouseBackend:
         sort = params.get("sort")
         if sort:
             # Columns we have materialized for better performance
-            materialized_cols = ["cited_by_count", "publication_year", "works_count", "title", "display_name", "source_id"]
+            materialized_cols = ["cited_by_count", "publication_year", "works_count", "title", "display_name", "source_id", "country_code"]
             sort_clauses = []
             for key, order in sort.items():
                 if key in materialized_cols:

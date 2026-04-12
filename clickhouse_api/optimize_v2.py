@@ -18,12 +18,15 @@ logger = logging.getLogger(__name__)
 
 def optimize():
     try:
+        is_secure = (CH_PORT == 8124)
         client = clickhouse_connect.get_client(
             host=CH_HOST,
             port=CH_PORT,
             username=CH_USER,
             password=CH_PASSWORD,
-            database=CH_DATABASE
+            database=CH_DATABASE,
+            secure=is_secure,
+            verify=False
         )
         logger.info(f"Connected to ClickHouse: {CH_HOST}")
     except Exception as e:
@@ -60,6 +63,15 @@ def optimize():
         "authors": [
             ("orcid", "String"),
             ("display_name", "String"),
+            ("works_count", "Int32", "JSONExtractInt(raw_data, 'works_count')"),
+            ("cited_by_count", "Int64", "JSONExtractInt(raw_data, 'cited_by_count')"),
+            ("updated_date", "String")
+        ],
+        "sources": [
+            ("display_name", "String"),
+            ("issn_l", "String"),
+            ("type", "String"),
+            ("country_code", "String"),
             ("works_count", "Int32", "JSONExtractInt(raw_data, 'works_count')"),
             ("cited_by_count", "Int64", "JSONExtractInt(raw_data, 'cited_by_count')"),
             ("updated_date", "String")
@@ -113,6 +125,10 @@ def optimize():
         ],
         "authors": [
             ("auth_name_idx", "display_name", "ngrambf_v1(4, 1024, 2, 1)", "1")
+        ],
+        "sources": [
+            ("issn_l_idx", "issn_l", "bloom_filter(0.01)", "1"),
+            ("source_name_idx", "display_name", "ngrambf_v1(4, 1024, 2, 1)", "1")
         ]
     }
     

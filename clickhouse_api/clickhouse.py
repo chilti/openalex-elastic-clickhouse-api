@@ -72,17 +72,63 @@ class ClickHouseBackend:
         # Handle search
         search_query = params.get("search")
         if search_query and search_query != '""':
+            # Map search column based on entity
+            search_col_map = {
+                "works": "title",
+                "authors": "display_name",
+                "institutions": "display_name",
+                "sources": "display_name",
+                "publishers": "display_name",
+                "funders": "display_name"
+            }
+            search_col = search_col_map.get(entity_name, "display_name")
+
             # Support title-specific search if requested via title:query
             if search_query.startswith("title:"):
                 title_query = search_query.replace("title:", "", 1).strip()
                 escaped_search = title_query.replace("'", "''")
                 where_clauses.append(f"`title` ILIKE '%{escaped_search}%'")
+            elif search_query.startswith("display_name:"):
+                dn_query = search_query.replace("display_name:", "", 1).strip()
+                escaped_search = dn_query.replace("'", "''")
+                where_clauses.append(f"`display_name` ILIKE '%{escaped_search}%'")
             else:
-                # DEFAULT SEARCH: Re-route to the materialized 'title' column 
-                # instead of searching the entire 'raw_data' JSON blob.
-                # This is 100x-1000x faster than ILIKE on a large JSON.
-                escaped_search = search_query.replace("'", "''")
-                where_clauses.append(f"`title` ILIKE '%{escaped_search}%'")
+                # DEFAULT SEARCH: Robust Token-Based Search
+                # 1. Normalize query (commas and hyphens to spaces)
+                normalized_query = search_query.replace(",", " ").replace("-", " ")
+                # 2. Extract tokens (unique and longer than 1 char if possible)
+                tokens = [t.strip() for t in normalized_query.split() if len(t.strip()) > 0]
+                
+                if tokens:
+                    token_clauses = []
+                    # Vowel expansion map for accent-insensitivity (using unicode escapes to avoid transit mangling)
+                    vowel_map = {
+                        'a': '[a\u00e1\u00e0\u00e2\u00e4]', 'e': '[e\u00e9\u00e8\u00ea\u00eb]', 
+                        'i': '[i\u00ed\u00ec\u00ee\u00ef]', 'o': '[o\u00f3\u00f2\u00f4\u00f6]', 
+                        'u': '[u\u00fa\u00f9\u00fb\u00fc]',
+                        'A': '[A\u00c1\u00c0\u00c2\u00c4]', 'E': '[E\u00c9\u00c8\u00ca\u00cb]', 
+                        'I': '[I\u00cd\u00cc\u00ce\u00cf]', 'O': '[O\u00d3\u00d2\u00d4\u00d6]', 
+                        'U': '[U\u00da\u00d9\u00db\u00dc]'
+                    }
+                    
+                    for t in tokens:
+                        # 1. Transform token into a case-insensitive regex with vowel expansion
+                        regex_token = ""
+                        for char in t:
+                            regex_token += vowel_map.get(char, char)
+                        
+                        # 2. Use ClickHouse match() for regex-based matching
+                        # (?i) makes the regex case-insensitive (Hyperscan/re2 supported)
+                        token_clauses.append(f"match(`{search_col}`, '(?i){regex_token}')")
+                    
+                    if len(token_clauses) > 1:
+                        where_clauses.append("(" + " AND ".join(token_clauses) + ")")
+                    else:
+                        where_clauses.append(token_clauses[0])
+                else:
+                    # Fallback for empty/weird tokens
+                    escaped_search = search_query.replace("'", "''")
+                    where_clauses.append(f"`{search_col}` ILIKE '%{escaped_search}%'")
         
         # Handle filters (simplified)
         filters = params.get("filters", [])
@@ -98,12 +144,14 @@ class ClickHouseBackend:
                 "institutions.id": "institution_ids",
                 "authorships.institutions.id": "institution_ids",
                 "authorships.author.id": "author_ids",
+                "orcid": "orcid",
+                "authorships.author.orcid": "orcid",
                 "topics.id": "primary_topic_id",
                 "primary_topic.id": "primary_topic_id"
             }
             # Keys that require raw_data LIKE search (nested array fields)
             raw_data_like_keys = {
-                "authorships.author.orcid", "authors.orcid"
+                "authorships.author.institution_id" # Example, keeping it small
             }
             
             # Columns we have materialized for better performance
@@ -181,6 +229,11 @@ class ClickHouseBackend:
                                     v = f"https://{v}"
                                 else:
                                     v = f"https://ror.org/{v}"
+                            elif "orcid" in key:
+                                if not v.startswith("orcid.org/"):
+                                    v = f"https://orcid.org/{v}"
+                                elif v.startswith("orcid.org/"):
+                                    v = f"https://{v}"
                         new_values.append(v)
                     values = new_values
 

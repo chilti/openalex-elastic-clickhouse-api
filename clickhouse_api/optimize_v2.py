@@ -64,6 +64,22 @@ def optimize():
             ("author_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> [x.1.1, x.2], JSONExtract(raw_data, 'authorships', 'Array(Tuple(author Tuple(display_name String), raw_author_name String))'))))"),
             ("institution_rors", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.1, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, String, String))))'))))"),
             ("institution_names", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.2, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String, String, String))))'))))"),
+            ("subfield", "String", "JSONExtractString(raw_data, 'primary_topic', 'subfield', 'display_name')"),
+            ("field", "String", "JSONExtractString(raw_data, 'primary_topic', 'field', 'display_name')"),
+            ("domain", "String", "JSONExtractString(raw_data, 'primary_topic', 'domain', 'display_name')"),
+            ("topic", "String", "JSONExtractString(raw_data, 'primary_topic', 'display_name')"),
+            ("language", "String", "JSONExtractString(raw_data, 'language')"),
+            ("oa_status", "String", "JSONExtractString(raw_data, 'open_access', 'oa_status')"),
+            ("fwci", "Float32", "toFloat32OrZero(JSONExtractString(raw_data, 'fwci'))"),
+            ("percentile", "Float32", "toFloat32OrZero(JSONExtractString(raw_data, 'citation_normalized_percentile', 'value'))"),
+            ("is_top_10", "UInt8", "coalesce(JSONExtractBool(raw_data, 'citation_normalized_percentile', 'is_in_top_10_percent'), JSONExtractBool(raw_data, 'is_in_top_10_percent'), 0)"),
+            ("is_top_1", "UInt8", "coalesce(JSONExtractBool(raw_data, 'citation_normalized_percentile', 'is_in_top_1_percent'), JSONExtractBool(raw_data, 'is_in_top_1_percent'), 0)"),
+            ("country_code", "String", "JSONExtractString(raw_data, 'authorships', 1, 'institutions', 1, 'country_code')"),
+            ("all_country_codes", "Array(String)", "arrayDistinct(arrayFlatten(arrayMap(x -> arrayMap(i -> i.1, x.1), JSONExtract(raw_data, 'authorships', 'Array(Tuple(institutions Array(Tuple(String))))'))))"),
+            ("source_type", "String", "JSONExtractString(raw_data, 'primary_location', 'source', 'type')"),
+            ("sdg_ids", "Array(String)", "arrayMap(x -> x.1, arrayFilter(x -> x.3 >= 0.4, JSONExtract(raw_data, 'sustainable_development_goals', 'Array(Tuple(String, String, Float32))')))"),
+            ("awards", "Array(String)", "arrayMap(x -> x.3, JSONExtract(raw_data, 'grants', 'Array(Tuple(String, String, String))'))"),
+            ("concept_ids", "Array(String)", "arrayMap(x -> x.1, JSONExtract(raw_data, 'concepts', 'Array(Tuple(String, String, String, Int8, Float32))'))"),
             ("updated_date", "String")
         ],
         "institutions": [
@@ -132,7 +148,11 @@ def optimize():
             ("source_id_idx", "source_id", "bloom_filter(0.01)", "1"),
             ("author_names_idx", "author_names", "tokenbf_v1(512, 3, 0)", "1"),
             ("inst_rors_idx", "institution_rors", "bloom_filter(0.01)", "1"),
-            ("inst_names_idx", "institution_names", "tokenbf_v1(512, 3, 0)", "1")
+            ("inst_names_idx", "institution_names", "tokenbf_v1(512, 3, 0)", "1"),
+            ("subfield_idx", "subfield", "bloom_filter(0.01)", "1"),
+            ("sdg_idx", "sdg_ids", "bloom_filter(0.01)", "1"),
+            ("concept_idx", "concept_ids", "tokenbf_v1(512, 3, 0)", "1"),
+            ("country_idx", "all_country_codes", "bloom_filter(0.01)", "1")
         ],
         "institutions": [
             ("ror_idx", "ror", "bloom_filter(0.01)", "1"),

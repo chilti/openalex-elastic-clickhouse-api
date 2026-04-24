@@ -1,8 +1,7 @@
-version: '3.8'
-
 services:
   api:
     build: .
+    restart: always
     volumes:
       - .:/app
     env_file:
@@ -20,6 +19,7 @@ services:
 
   redis:
     image: redis:alpine
+    restart: always
     user: "0:0"
     ports:
       - "127.0.0.1:6379:6379"

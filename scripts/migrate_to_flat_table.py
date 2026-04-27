@@ -28,16 +28,17 @@ def get_client():
     )
 
 def create_flat_table(client):
-    # Ya no borramos la tabla automáticamente para permitir reanudación
-    # client.command("DROP TABLE IF EXISTS works_flat_mv")
-    # client.command("DROP TABLE IF EXISTS works_flat")
+    logger.info("Limpiando tablas para aplicar nuevo esquema (Abstract + Partitioning)...")
+    client.command("DROP TABLE IF EXISTS works_flat_mv")
+    client.command("DROP TABLE IF EXISTS works_flat")
     
-    logger.info("Verificando/Creando tabla works_flat...")
+    logger.info("Creando tabla works_flat con particionamiento...")
     create_query = """
     CREATE TABLE IF NOT EXISTS works_flat (
         id String,
         doi String,
         title String,
+        abstract String,
         publication_year UInt16,
         publication_date Date,
         type LowCardinality(String),
@@ -85,6 +86,7 @@ def create_flat_table(client):
         sdgs Array(LowCardinality(String))
 
     ) ENGINE = ReplacingMergeTree()
+    PARTITION BY publication_year
     ORDER BY (id)
     """
     client.command(create_query)
@@ -97,6 +99,22 @@ def create_flat_table(client):
         id,
         JSONExtractString(raw_data, 'doi') as doi,
         JSONExtractString(raw_data, 'title') as title,
+        arrayStringConcat(
+            arrayMap(
+                x -> x.1,
+                arraySort(
+                    x -> x.2,
+                    arrayFlatten(
+                        arrayMap(
+                            (k, v) -> arrayMap(p -> (k, p), v),
+                            mapKeys(JSONExtract(raw_data, 'abstract_inverted_index', 'Map(String, Array(Int32))')),
+                            mapValues(JSONExtract(raw_data, 'abstract_inverted_index', 'Map(String, Array(Int32))'))
+                        )
+                    )
+                )
+            ),
+            ' '
+        ) as abstract,
         toUInt16(JSONExtractInt(raw_data, 'publication_year')) as publication_year,
         parseDateTimeBestEffortOrZero(JSONExtractString(raw_data, 'publication_date')) as publication_date,
         JSONExtractString(raw_data, 'type') as type,
@@ -149,12 +167,12 @@ def create_flat_table(client):
 def migrate_batch(client, year):
     logger.info(f"🚀 Procesando año {year}...")
     
-    # Limpiamos datos parciales del año antes de reintentar (por si falló a mitad)
-    logger.info(f"Limpiando posibles datos previos del año {year}...")
-    client.command(f"ALTER TABLE works_flat DELETE WHERE publication_year = {year}")
-    
-    # Esperar un momento a que la mutación se procese (opcional pero recomendado en CH)
-    time.sleep(2)
+    # Limpieza instantánea gracias al particionamiento
+    logger.info(f"Limpiando partición del año {year} (Instantáneo)...")
+    try:
+        client.command(f"ALTER TABLE works_flat DROP PARTITION '{year}'")
+    except Exception as e:
+        logger.debug(f"No se pudo borrar partición {year} (posiblemente no existe): {e}")
     
     insert_query = f"""
     INSERT INTO works_flat
@@ -162,6 +180,22 @@ def migrate_batch(client, year):
         id,
         JSONExtractString(raw_data, 'doi') as doi,
         JSONExtractString(raw_data, 'title') as title,
+        arrayStringConcat(
+            arrayMap(
+                x -> x.1,
+                arraySort(
+                    x -> x.2,
+                    arrayFlatten(
+                        arrayMap(
+                            (k, v) -> arrayMap(p -> (k, p), v),
+                            mapKeys(JSONExtract(raw_data, 'abstract_inverted_index', 'Map(String, Array(Int32))')),
+                            mapValues(JSONExtract(raw_data, 'abstract_inverted_index', 'Map(String, Array(Int32))'))
+                        )
+                    )
+                )
+            ),
+            ' '
+        ) as abstract,
         toUInt16(JSONExtractInt(raw_data, 'publication_year')) as publication_year,
         parseDateTimeBestEffortOrZero(JSONExtractString(raw_data, 'publication_date')) as publication_date,
         JSONExtractString(raw_data, 'type') as type,

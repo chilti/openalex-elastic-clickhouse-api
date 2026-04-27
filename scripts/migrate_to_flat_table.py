@@ -168,12 +168,12 @@ def create_flat_table(client):
 def migrate_batch(client, year):
     logger.info(f"🚀 Procesando año {year}...")
     
-    # Limpieza instantánea gracias al particionamiento
-    logger.info(f"Limpiando partición del año {year} (Instantáneo)...")
-    try:
-        client.command(f"ALTER TABLE works_flat DROP PARTITION '{year}'")
-    except Exception as e:
-        logger.debug(f"No se pudo borrar partición {year} (posiblemente no existe): {e}")
+    # Comentado temporalmente para evitar bloqueos de metadatos en el servidor
+    # logger.info(f"Limpiando partición del año {year} (Instantáneo)...")
+    # try:
+    #     client.command(f"ALTER TABLE works_flat DROP PARTITION '{year}'")
+    # except Exception as e:
+    #     logger.debug(f"No se pudo borrar partición {year} (posiblemente no existe): {e}")
     
     insert_query = f"""
     INSERT INTO works_flat

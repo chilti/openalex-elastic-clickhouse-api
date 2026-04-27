@@ -222,40 +222,39 @@ def main():
         client = get_client()
         create_flat_table(client)
         
-        # 1. Obtener conteos por año en la tabla plana (migrados)
-        logger.info("Verificando progreso en works_flat...")
-        res_processed = client.query("SELECT publication_year, count() FROM works_flat GROUP BY publication_year").result_rows
-        processed_stats = {row[0]: row[1] for row in res_processed}
+        # 1. Obtener conteos de IDs únicos por año en la tabla plana
+        logger.info("Verificando progreso en works_flat (IDs únicos)...")
+        res_processed = client.query("SELECT publication_year, count(DISTINCT id) FROM works_flat GROUP BY publication_year").result_rows
+        processed_stats = {int(row[0]): int(row[1]) for row in res_processed}
         
-        # 2. Obtener conteos por año en la tabla original (objetivo)
-        # Usamos la columna nativa 'publication_year' que debe estar en 'works' para mayor velocidad
-        logger.info("Escaneando años y conteos en works (raw)...")
+        # 2. Obtener conteos de IDs únicos por año en la tabla original (objetivo)
+        logger.info("Escaneando trabajos únicos en works (raw) - Esto puede tardar un poco...")
         try:
-            raw_stats_res = client.query("SELECT publication_year, count() FROM works WHERE publication_year > 0 GROUP BY publication_year").result_rows
+            raw_stats_res = client.query("SELECT publication_year, count(DISTINCT id) FROM works WHERE publication_year > 0 GROUP BY publication_year").result_rows
         except Exception:
-            logger.warning("No se pudo usar la columna 'publication_year' nativa, recurriendo a JSONExtract (más lento)...")
-            raw_stats_res = client.query("SELECT toUInt16(JSONExtractInt(raw_data, 'publication_year')) as yr, count() FROM works WHERE yr > 0 GROUP BY yr").result_rows
+            logger.warning("No se pudo usar la columna 'publication_year' nativa, recurriendo a JSONExtract...")
+            raw_stats_res = client.query("SELECT toUInt16(JSONExtractInt(raw_data, 'publication_year')) as yr, count(DISTINCT id) FROM works WHERE yr > 0 GROUP BY yr").result_rows
             
         raw_stats = {int(row[0]): int(row[1]) for row in raw_stats_res}
         
         all_years = sorted(raw_stats.keys(), reverse=True)
         
-        # Filtramos: se procesa si el año no está o si el conteo es menor al original (migración incompleta)
+        # Filtramos: se procesa si el año no está o si el conteo de únicos es menor al original
         years_to_process = []
         for y in all_years:
             target_count = raw_stats[y]
-            current_count = int(processed_stats.get(y, 0))
+            current_count = processed_stats.get(y, 0)
             
-            if current_count < target_count:
+            # Si faltan más de 10 registros, re-procesamos (tolerancia para desajustes mínimos)
+            if current_count < (target_count - 10):
                 if current_count > 0:
-                    logger.info(f"▶️ Año {y} incompleto: {current_count} en flat vs {target_count} en raw. Se re-procesará.")
+                    logger.info(f"▶️ Año {y} incompleto: {current_count} únicos en flat vs {target_count} únicos en raw. Se re-procesará.")
                 else:
-                    logger.info(f"🆕 Año {y}: pendiente de migrar ({target_count} registros).")
+                    logger.info(f"🆕 Año {y}: pendiente de migrar ({target_count} únicos).")
                 years_to_process.append(y)
             else:
-                # Opcional: log de saltado para dar visibilidad
-                if y >= 2000: # Solo loguear años recientes para no saturar
-                    logger.info(f"✅ Año {y} ya está completo ({current_count} registros).")
+                if y >= 2000:
+                    logger.info(f"✅ Año {y} ya está completo ({current_count} únicos).")
         
         if not years_to_process:
             logger.info("🎉 ¡Todos los años parecen estar migrados!")

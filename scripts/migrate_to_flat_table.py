@@ -27,6 +27,10 @@ def get_client():
     )
 
 def create_flat_table(client):
+    logger.info("Limpiando tablas existentes (Reset)...")
+    client.command("DROP TABLE IF EXISTS works_flat_mv")
+    client.command("DROP TABLE IF EXISTS works_flat")
+    
     logger.info("Creando tabla works_flat...")
     create_query = """
     CREATE TABLE IF NOT EXISTS works_flat (

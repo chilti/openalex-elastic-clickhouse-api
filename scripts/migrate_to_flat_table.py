@@ -23,15 +23,16 @@ def get_client():
         port=CH_PORT,
         username=CH_USER,
         password=CH_PASSWORD,
-        database=CH_DATABASE
+        database=CH_DATABASE,
+        send_receive_timeout=900 # Aumentado a 15 minutos para evitar timeouts en años grandes
     )
 
 def create_flat_table(client):
-    logger.info("Limpiando tablas existentes (Reset)...")
-    client.command("DROP TABLE IF EXISTS works_flat_mv")
-    client.command("DROP TABLE IF EXISTS works_flat")
+    # Ya no borramos la tabla automáticamente para permitir reanudación
+    # client.command("DROP TABLE IF EXISTS works_flat_mv")
+    # client.command("DROP TABLE IF EXISTS works_flat")
     
-    logger.info("Creando tabla works_flat...")
+    logger.info("Verificando/Creando tabla works_flat...")
     create_query = """
     CREATE TABLE IF NOT EXISTS works_flat (
         id String,
@@ -148,6 +149,13 @@ def create_flat_table(client):
 def migrate_batch(client, year):
     logger.info(f"🚀 Procesando año {year}...")
     
+    # Limpiamos datos parciales del año antes de reintentar (por si falló a mitad)
+    logger.info(f"Limpiando posibles datos previos del año {year}...")
+    client.command(f"ALTER TABLE works_flat DELETE WHERE publication_year = {year}")
+    
+    # Esperar un momento a que la mutación se procese (opcional pero recomendado en CH)
+    time.sleep(2)
+    
     insert_query = f"""
     INSERT INTO works_flat
     SELECT
@@ -214,19 +222,28 @@ def main():
         client = get_client()
         create_flat_table(client)
         
-        # 1. Obtener años ya procesados (conteo por año para ver qué falta)
+        # 1. Obtener conteos por año en la tabla plana (migrados)
         logger.info("Verificando progreso en works_flat...")
         res_processed = client.query("SELECT publication_year, count() FROM works_flat GROUP BY publication_year").result_rows
         processed_stats = {row[0]: row[1] for row in res_processed}
         
-        # 2. Obtener todos los años disponibles en la tabla original
-        logger.info("Escaneando años disponibles en works_raw...")
-        all_years_res = client.query("SELECT DISTINCT toUInt16(JSONExtractInt(raw_data, 'publication_year')) as yr FROM works WHERE yr > 0").result_rows
-        all_years = sorted([row[0] for row in all_years_res], reverse=True)
+        # 2. Obtener conteos por año en la tabla original (objetivo)
+        logger.info("Escaneando años y conteos en works (raw)...")
+        raw_stats_res = client.query("SELECT toUInt16(JSONExtractInt(raw_data, 'publication_year')) as yr, count() FROM works WHERE yr > 0 GROUP BY yr").result_rows
+        raw_stats = {row[0]: row[1] for row in raw_stats_res}
         
-        # Filtramos: si un año tiene 0 registros o estamos forzando, se procesa.
-        # Para ser conservadores, procesamos años que no tengan registros en la tabla plana.
-        years_to_process = [y for y in all_years if y not in processed_stats]
+        all_years = sorted(raw_stats.keys(), reverse=True)
+        
+        # Filtramos: se procesa si el año no está o si el conteo es menor al original (migración incompleta)
+        years_to_process = []
+        for y in all_years:
+            target_count = raw_stats[y]
+            current_count = processed_stats.get(y, 0)
+            
+            if current_count < target_count:
+                if current_count > 0:
+                    logger.info(f"Año {y} incompleto ({current_count}/{target_count}). Se re-procesará.")
+                years_to_process.append(y)
         
         if not years_to_process:
             logger.info("🎉 ¡Todos los años parecen estar migrados!")

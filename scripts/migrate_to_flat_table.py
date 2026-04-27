@@ -30,7 +30,7 @@ def get_client():
 def create_flat_table(client):
     logger.info("Limpiando tablas para aplicar nuevo esquema (Abstract + Partitioning)...")
     client.command("DROP TABLE IF EXISTS works_flat_mv")
-    client.command("DROP TABLE IF EXISTS works_flat")
+    client.command("DROP TABLE IF EXISTS works_flat SYNC SETTINGS max_table_size_to_drop = 0")
     
     logger.info("Creando tabla works_flat con particionamiento...")
     create_query = """

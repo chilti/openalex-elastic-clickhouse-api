@@ -146,26 +146,27 @@ class ClickHouseBackend:
                 "authorships.author.id": "author_ids",
                 "orcid": "orcid",
                 "authorships.author.orcid": "orcid",
-                "primary_topic.id": "primary_topic_id"
+                "primary_topic.id": "primary_topic_id",
+                "sustainable_development_goals.id": "sdg_ids",
+                "topics.id": "topic_ids",
+                "primary_topic.subfield.id": "primary_subfield_id",
+                "primary_topic.field.id": "primary_field_id",
+                "primary_topic.domain.id": "primary_domain_id"
             }
             # Keys that require raw_data LIKE search (nested array fields or deep objects)
             raw_data_like_keys = {
                 "authorships.author.institution_id",
-                "sustainable_development_goals.id",
-                "topics.id",
                 "topics.subfield.id",
                 "topics.field.id",
-                "topics.domain.id",
-                "primary_topic.subfield.id",
-                "primary_topic.field.id",
-                "primary_topic.domain.id"
+                "topics.domain.id"
             }
             
             # Columns we have materialized for better performance
             materialized_cols = ["doi", "title", "publication_year", "cited_by_count", "is_oa", "is_xpac", "type", "updated_date", 
                                  "display_name", "orcid", "ror", "works_count", "issn_l", "level", "source_id", 
                                  "primary_topic_id", "institution_ids", "author_ids",
-                                 "author_names", "institution_rors", "institution_names", "country_code"]
+                                 "author_names", "institution_rors", "institution_names", "country_code",
+                                 "sdg_ids", "topic_ids", "primary_subfield_id", "primary_field_id", "primary_domain_id"]
             
             for f in filters:
                 for key, value in f.items():
@@ -262,7 +263,8 @@ class ClickHouseBackend:
                         col_name = f"`{key}`" if key != "id" else "id"
                         
                         # Handle array columns specifically
-                        if key in ["author_names", "institution_rors", "institution_names", "institution_ids", "author_ids"]:
+                        array_cols = ["author_names", "institution_rors", "institution_names", "institution_ids", "author_ids", "sdg_ids", "topic_ids"]
+                        if key in array_cols:
                             if op == "=":
                                 if len(values) > 1:
                                     vals_str = ",".join([f"'{v}'" for v in values])

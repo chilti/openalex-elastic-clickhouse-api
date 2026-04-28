@@ -146,12 +146,19 @@ class ClickHouseBackend:
                 "authorships.author.id": "author_ids",
                 "orcid": "orcid",
                 "authorships.author.orcid": "orcid",
-                "topics.id": "primary_topic_id",
                 "primary_topic.id": "primary_topic_id"
             }
-            # Keys that require raw_data LIKE search (nested array fields)
+            # Keys that require raw_data LIKE search (nested array fields or deep objects)
             raw_data_like_keys = {
-                "authorships.author.institution_id" # Example, keeping it small
+                "authorships.author.institution_id",
+                "sustainable_development_goals.id",
+                "topics.id",
+                "topics.subfield.id",
+                "topics.field.id",
+                "topics.domain.id",
+                "primary_topic.subfield.id",
+                "primary_topic.field.id",
+                "primary_topic.domain.id"
             }
             
             # Columns we have materialized for better performance

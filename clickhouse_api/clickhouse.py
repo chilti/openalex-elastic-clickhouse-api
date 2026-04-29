@@ -61,7 +61,22 @@ class ClickHouseBackend:
 
     def query_entity(self, entity_name, params):
         client = self.get_client()
-        table_name = f"`{entity_name}`"
+        
+        # PARAMETRIZACIÓN: Por defecto usamos semillas para velocidad, 
+        # pero permitimos búsqueda global con ?global=true
+        is_global = str(params.get('global', 'false')).lower() == 'true'
+        
+        if not is_global:
+            if entity_name == "works":
+                table_name = "rag.works_seed_mexico"
+            elif entity_name == "authors":
+                table_name = "rag.authors_seed_mexico"
+            elif entity_name == "institutions":
+                table_name = "rag.institutions_seed_mexico"
+            else:
+                table_name = f"`{entity_name}`"
+        else:
+            table_name = f"`{entity_name}`"
         
         # Base query
         sql = f"SELECT raw_data FROM {table_name}"

@@ -27,6 +27,7 @@ def parse_params(request):
         "search_type": search_type,
         "search_scope": search_scope,
         "sort": map_sort_params(request.args.get("sort")),
+        "global": request.args.get("global"),
     }
     if params["group_bys"]:
         params["group_bys"] = params["group_bys"].split(",")

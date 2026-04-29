@@ -74,9 +74,9 @@ class ClickHouseBackend:
             elif entity_name == "institutions":
                 table_name = "rag.institutions_seed_mexico"
             else:
-                table_name = f"`{entity_name}`"
+                table_name = f"rag.{entity_name}"
         else:
-            table_name = f"`{entity_name}`"
+            table_name = f"rag.{entity_name}"
         
         # Base query
         sql = f"SELECT raw_data FROM {table_name}"

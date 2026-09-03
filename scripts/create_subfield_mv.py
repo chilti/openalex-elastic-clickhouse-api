@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-load_dotenv(r'C:\Users\jlja\Documents\Proyectos\revistaslatam\.env')
+load_dotenv('clickhouse_api/.env')
 
 client = clickhouse_connect.get_client(
     host=os.environ.get('CH_HOST', '10.90.0.87'),

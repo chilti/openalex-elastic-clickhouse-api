@@ -76,11 +76,16 @@ class ClickHouseBackend:
             else:
                 table_name = f"rag.{entity_name}"
         else:
-            table_name = f"rag.{entity_name}"
+            # works_flat es ReplacingMergeTree — FINAL fuerza dedup de snapshots
+            if entity_name == "works":
+                table_name = "rag.works_flat FINAL"
+            else:
+                table_name = f"rag.{entity_name}"
         
         # Base query
         sql = f"SELECT raw_data FROM {table_name}"
-        count_sql = f"SELECT count() FROM {table_name}"
+        # COUNT(DISTINCT id) para evitar duplicados por semilla o snapshots
+        count_sql = f"SELECT count(DISTINCT id) FROM {table_name}"
         
         where_clauses = []
         

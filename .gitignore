@@ -1,4 +1,7 @@
 .env
+.env*
+*.bak
+*.log
 .idea/
 __pycache__/
 .pytest_cache/
@@ -17,14 +20,9 @@ scratch/
 
 # vscode editor
 .vscode/**/*
-# !.vscode/settings.json
-# !.vscode/tasks.json
-# !.vscode/launch.json
-# !.vscode/extensions.json
 .aider*
 run_local.py
 
-# Local virtualenv
 # Diagnostic and test scripts
 test_*.py
 server_log*.txt
@@ -32,3 +30,4 @@ flask_error_log*.txt
 schema_dump_error.txt
 test_dump_output.txt
 list_ch_db.py
+*diagnosis*.json

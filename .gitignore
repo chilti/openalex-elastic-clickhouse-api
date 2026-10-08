@@ -31,3 +31,4 @@ schema_dump_error.txt
 test_dump_output.txt
 list_ch_db.py
 *diagnosis*.json
+clickhouse_api/log2.txt

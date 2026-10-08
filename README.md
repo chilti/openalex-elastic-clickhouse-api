@@ -16,6 +16,9 @@ A complete ClickHouse backend that plugs into the existing Flask API without mod
 | `clickhouse.py` | Query builder with materialized column routing, token-based search, accent-insensitive regex matching, and automatic ID normalization |
 | `optimize_v2.py` | Schema optimization: materializes frequently-queried fields from the `raw_data` JSON blob into dedicated columns |
 | `load_openalex_clickhouse.py` | Bulk loader for ingesting OpenAlex snapshot data into ClickHouse |
+| `openalex_schemas.sql` | Complete DDL schemas for all OpenAlex entity tables, skip indexes, and flat analytical layer |
+| `init_openalex_schemas.py` | Automated schema initializer using ClickHouse Python driver |
+| `GUIA_CARGA_SNAPSHOT_OPENALEX.md` | Comprehensive guide with official download links, AWS S3 commands, and bulk ingestion workflows |
 | `.env` | Connection credentials (not committed) |
 
 ### Modified Upstream Files
@@ -39,7 +42,7 @@ A complete ClickHouse backend that plugs into the existing Flask API without mod
 ### Prerequisites
 
 - Docker & Docker Compose
-- A ClickHouse server with the OpenAlex data loaded (see `clickhouse_api/load_openalex_clickhouse.py`)
+- A ClickHouse server with the OpenAlex data loaded (see [Snapshot Ingestion Guide](clickhouse_api/GUIA_CARGA_SNAPSHOT_OPENALEX.md))
 
 ### Configuration
 
@@ -82,6 +85,32 @@ curl 'http://localhost:5012/works?filter=institutions.ror:03rzb4f20'
 # Filter works by date range
 curl 'http://localhost:5012/works?filter=from_publication_date:2023-01-01,to_publication_date:2024-12-31'
 ```
+
+## OpenAlex Snapshot Ingestion & Schemas
+
+Para descargar el snapshot oficial de OpenAlex (gratuito mediante AWS Open Data) y cargarlo a ClickHouse:
+
+1. **Guía Completa:** Consulta [`clickhouse_api/GUIA_CARGA_SNAPSHOT_OPENALEX.md`](clickhouse_api/GUIA_CARGA_SNAPSHOT_OPENALEX.md).
+2. **Crear Esquemas en ClickHouse:**
+   ```bash
+   /home/ambientesPy/revistaslatam/bin/python clickhouse_api/init_openalex_schemas.py
+   ```
+   *(o importa el DDL directamente desde [`clickhouse_api/openalex_schemas.sql`](clickhouse_api/openalex_schemas.sql))*
+3. **Descargar Snapshot (JSON Lines):**
+   ```bash
+   aws s3 sync "s3://openalex/data/jsonl" "/mnt/expansion/openalex/openalex-snapshot/data" --no-sign-request
+   ```
+4. **Cargar a ClickHouse en Segundo Plano:**
+   ```bash
+   nohup /home/ambientesPy/revistaslatam/bin/python clickhouse_api/load_openalex_clickhouse.py \
+     /mnt/expansion/openalex/openalex-snapshot/data \
+     --workers 6 --batch-size 5000 --delay 1.0 \
+     > clickhouse_api/carga_openalex.log 2>&1 &
+   ```
+5. **Monitorear Progreso:**
+   ```bash
+   /home/ambientesPy/revistaslatam/bin/python clickhouse_api/check_ingestion_status.py
+   ```
 
 ## Architecture
 
